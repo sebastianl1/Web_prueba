@@ -57,12 +57,12 @@
       border:1px solid var(--border-subtle,#30363d); border-radius:12px;
       box-shadow:0 12px 32px rgba(0,0,0,0.45);
       font-family:'Inter',system-ui,sans-serif; font-size:13px;
-      display:none; overflow:hidden;
+      display:none; overflow:hidden; cursor:grab; user-select:none;
     `;
     p.innerHTML = `
-      <div style="display:flex;align-items:center;justify-content:space-between;
+      <div id="tiDragHandle" style="display:flex;align-items:center;justify-content:space-between;
                   padding:10px 12px;border-bottom:1px solid var(--border-subtle,#30363d);
-                  background:rgba(255,255,255,0.03)">
+                  background:rgba(255,255,255,0.03);cursor:grab">
         <div style="display:flex;align-items:center;gap:8px;font-weight:600;letter-spacing:.04em;font-size:11px;color:var(--text-muted,#8b949e);text-transform:uppercase">
           <span style="width:8px;height:8px;border-radius:50%;background:#22c55e;box-shadow:0 0 8px #22c55e"></span>
           Tag activo
@@ -77,10 +77,11 @@
           <button data-go="dashboard" class="ti-btn ti-btn-icon" title="Ir al Dashboard">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
           </button>
+          <button id="tiMinimize" style="background:none;border:none;color:var(--text-muted,#8b949e);cursor:pointer;font-size:14px;line-height:1;padding:2px 5px;border-radius:4px" title="Minimizar">─</button>
           <button id="tagInspectorClose" style="background:none;border:none;color:var(--text-muted,#8b949e);cursor:pointer;font-size:16px;line-height:1;padding:2px 6px;border-radius:4px;margin-left:2px">×</button>
         </div>
       </div>
-      <div style="padding:12px">
+      <div id="tiBody" style="padding:12px">
         <div id="tagInspectorTag"  style="font-weight:600;font-size:14px;margin-bottom:2px"></div>
         <div id="tagInspectorDesc" style="font-size:11px;color:var(--text-muted,#8b949e);margin-bottom:6px"></div>
         <div id="tagInspectorLaw"  style="font-size:10px;color:var(--accent-cyan,#00d4ff);margin-bottom:8px;font-family:'JetBrains Mono',monospace"></div>
@@ -100,6 +101,65 @@
       </div>
     `;
     document.body.appendChild(p);
+
+    // ── Drag to move ──
+    (function() {
+      var dragHandle = p.querySelector('#tiDragHandle');
+      var isDragging = false, startX, startY, origX, origY;
+      dragHandle.addEventListener('mousedown', function(e) {
+        isDragging = true;
+        p.style.cursor = 'grabbing';
+        startX = e.clientX; startY = e.clientY;
+        var rect = p.getBoundingClientRect();
+        origX = rect.left; origY = rect.top;
+        // Fix position to explicit coords
+        p.style.right = ''; p.style.bottom = '';
+        p.style.left = origX + 'px'; p.style.top = origY + 'px';
+        e.preventDefault();
+      });
+      document.addEventListener('mousemove', function(e) {
+        if (!isDragging) return;
+        p.style.left = (origX + e.clientX - startX) + 'px';
+        p.style.top = (origY + e.clientY - startY) + 'px';
+      });
+      document.addEventListener('mouseup', function() {
+        if (isDragging) { isDragging = false; p.style.cursor = 'grab'; }
+      });
+      // Touch support
+      dragHandle.addEventListener('touchstart', function(e) {
+        var t = e.touches[0];
+        isDragging = true;
+        startX = t.clientX; startY = t.clientY;
+        var rect = p.getBoundingClientRect();
+        origX = rect.left; origY = rect.top;
+        p.style.right = ''; p.style.bottom = '';
+        p.style.left = origX + 'px'; p.style.top = origY + 'px';
+      }, {passive:true});
+      document.addEventListener('touchmove', function(e) {
+        if (!isDragging) return;
+        var t = e.touches[0];
+        p.style.left = (origX + t.clientX - startX) + 'px';
+        p.style.top = (origY + t.clientY - startY) + 'px';
+      }, {passive:true});
+      document.addEventListener('touchend', function() { isDragging = false; });
+    })();
+
+    // ── Minimize ──
+    p.querySelector('#tiMinimize').addEventListener('click', function() {
+      var body = p.querySelector('#tiBody');
+      var btn = this;
+      if (body.style.display === 'none') {
+        body.style.display = '';
+        btn.textContent = '─';
+        btn.title = 'Minimizar';
+        p.style.maxWidth = '';
+      } else {
+        body.style.display = 'none';
+        btn.textContent = '□';
+        btn.title = 'Expandir';
+        p.style.maxWidth = '180px';
+      }
+    });
 
     // Estilo de los botones
     const style = document.createElement('style');

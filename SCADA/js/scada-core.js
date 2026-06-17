@@ -504,6 +504,19 @@ function _simulateProcessVars(now) {
   const vars = vm.variables;
 
   const simValues = {
+    // ── Proceso Unitario 1: Caracterización de Materia Prima ──
+    'ALCO-001':    () => 92.5 + 3 * Math.sin(t * 0.006 + 0.8) + Math.random() * 0.5,
+    'CLP-001':     () => Math.random() > 0.02 ? 1 : 0,
+    'E-003':       () => 75 + 5 * Math.sin(t * 0.005 + 1.2) + Math.random() * 0.8,
+    'E.W-003':     () => 420 + 20 * Math.sin(t * 0.004 + 0.5) + Math.random() * 2,
+    'FIL-001':     () => 1.2 + 0.4 * Math.sin(t * 0.008 + 2.1) + Math.random() * 0.08,
+    'P-001':       () => Math.random() > 0.03 ? 1 : 0,
+    'SALACE-001':  () => 950 + 80 * Math.sin(t * 0.005 + 1.8) + Math.random() * 5,
+    'TK-001':      () => 68 + 10 * Math.sin(t * 0.004 + 0.3) + Math.random() * 1,
+    'TK-002':      () => 45 + 12 * Math.sin(t * 0.005 + 2.5) + Math.random() * 1,
+    'TK-003':      () => 52 + 8 * Math.sin(t * 0.006 + 1.1) + Math.random() * 1,
+    'TK-004':      () => 35 + 15 * Math.sin(t * 0.004 + 3.2) + Math.random() * 1,
+    // ── Variables legadas ──
     TK_ACEITE:       () => 55 + 10 * Math.sin(t * 0.004 + 1.7) + Math.random() * 1,
     FILTRADO:        () => 0.8 + 0.3 * Math.sin(t * 0.009 + 0.5) + Math.random() * 0.05,
     BOMBEO:          () => Math.random() > 0.05 ? 1 : 0,

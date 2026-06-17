@@ -346,12 +346,29 @@ window._renderPropertyDashboard = _renderPropertyDashboard;
 
 // ═══ scadaBus ════════════════════════════════════════════════════
 if (window.scadaBus) {
+  // Inject pulse keyframes once
+  if (!document.getElementById('_dashPulseStyle')) {
+    var ps = document.createElement('style');
+    ps.id = '_dashPulseStyle';
+    ps.textContent = '@keyframes dashPulse {\
+  0%, 100% { outline: 2px solid #22c55e; box-shadow: 0 0 0 4px rgba(34,197,94,0.15); }\
+  50% { outline: 3px solid #22c55e; box-shadow: 0 0 0 8px rgba(34,197,94,0.3); }\
+}';
+    document.head.appendChild(ps);
+  }
+
   window.scadaBus.on('tag:focus', function(e) {
+    // Clear previous highlight
+    if (window._dashHighlightedCard) {
+      var prev = window._dashHighlightedCard;
+      prev.style.animation = '';
+      prev.style.outline = '';
+      prev.style.boxShadow = '';
+    }
     var card = document.querySelector('.dash-card[data-var-id="' + e.varId + '"]');
     if (!card) return;
-    card.style.outline = '2px solid #22c55e';
-    card.style.boxShadow = '0 0 0 4px rgba(34,197,94,0.18)';
+    card.style.animation = 'dashPulse 1.2s ease-in-out infinite';
     card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    setTimeout(function() { card.style.outline = ''; card.style.boxShadow = ''; }, 2200);
+    window._dashHighlightedCard = card;
   });
 }

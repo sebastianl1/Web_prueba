@@ -589,18 +589,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     const uploadBtn = document.getElementById('pidLocalUploadBtn') || document.createElement('button');
     uploadBtn.className = 'btn btn-sm';
     uploadBtn.style.cssText = 'border:1px solid var(--primary,#10b981);color:var(--primary,#10b981);background:transparent;font-size:12px;display:flex;align-items:center;gap:6px;margin-right:6px';
-    uploadBtn.innerHTML = '📤 Subir P&ID (.svg / .dwg)';
+    uploadBtn.innerHTML = '📤 Subir SVG';
     uploadBtn.onclick = () => fileInput.click();
     if (!uploadBtn.parentElement) toolbar.prepend(uploadBtn);
 
-    // Botón "OPERACIONES UNITARIAS" — gestiona archivos .svg de unidades
+    // Botón "PROCESOS UNITARIOS" — gestiona archivos .svg de unidades
     if (!document.getElementById('pidOpUnitBtn')) {
       const opBtn = document.createElement('button');
       opBtn.id = 'pidOpUnitBtn';
       opBtn.className = 'btn btn-sm';
       opBtn.style.cssText = 'border:1px solid var(--border);color:var(--text-secondary);background:transparent;font-size:12px;display:flex;align-items:center;gap:6px;margin-right:6px';
-      opBtn.innerHTML = 'OPERACIONES UNITARIAS';
-      opBtn.title = 'Insertar / cargar SVG de operaciones unitarias';
+      opBtn.innerHTML = '📂 PROCESOS UNITARIOS';
+      opBtn.title = 'Seleccionar / cargar diagrama de proceso unitario';
       opBtn.onclick = () => window.openOpUnitModal && window.openOpUnitModal();
       toolbar.prepend(opBtn);
     }
@@ -693,7 +693,8 @@ function _wirePIDLiveValues(svgEl) {
     text.setAttribute('data-live-tag', tag);
     text.setAttribute('data-live-var', varId);
     text.setAttribute('filter', 'drop-shadow(0 0 2px rgba(0,0,0,0.6))');
-    text.textContent = tag + ': --';
+    text.textContent = tag;
+    text.style.display = 'none';
 
     if (el.parentNode) el.parentNode.insertBefore(text, el.nextSibling);
   });
@@ -712,11 +713,12 @@ function _updatePIDLiveValues() {
     const varId = text.getAttribute('data-live-var');
     if (!tag && !varId) return;
     let info = varId && pv[varId] ? pv[varId] : pv[tag];
-    if (info && info.val != null) {
+    if (info && info.val != null && Number(info.val) !== 0) {
       const n = Number(info.val);
-      text.textContent = (isNaN(n) ? info.val : n.toFixed(1)) + (info.unit ? ' ' + info.unit : '');
+      text.textContent = tag + ': ' + (isNaN(n) ? info.val : n.toFixed(1)) + (info.unit ? ' ' + info.unit : '');
+      text.style.display = '';
     } else {
-      text.textContent = (varId || tag) + ': --';
+      text.style.display = 'none';
     }
   });
 
@@ -841,7 +843,7 @@ if (window.scadaBus) {
   });
 }
 
-// ─── OPERACIONES UNITARIAS (archivos .svg) ──────────────────────
+// ─── PROCESOS UNITARIOS (archivos .svg) ─────────────────────────
 window.listOpUnitSVGs = async function() {
   // Intenta listar primero /operaciones_unitarias y como fallback /pid
   const paths = ['/operaciones_unitarias', '/op_units', '/pid'];
@@ -880,7 +882,7 @@ window.loadOpUnitSVG = async function(path, filename) {
         wrap.setAttribute('transform', `translate(${vb.width*0.4},${vb.height*0.4}) scale(0.6)`);
         baseSvg.appendChild(wrap);
         window._normalizeSVGColors && window._normalizeSVGColors(baseSvg);
-        window.showNotif?.(`Operación unitaria "${filename}" añadida`, 'success');
+        window.showNotif?.(`Proceso unitario "${filename}" añadido`, 'success');
       } else {
         throw new Error('SVG inválido');
       }
@@ -894,11 +896,17 @@ window.loadOpUnitSVG = async function(path, filename) {
         svgEl.setAttribute('preserveAspectRatio', 'xMidYMid meet');
         window._normalizeSVGColors && window._normalizeSVGColors(svgEl);
         window._addSVGPanZoom && window._addSVGPanZoom(svgEl);
+        window._wireSVGHotspots && window._wireSVGHotspots(svgEl);
+        window._wirePIDLiveValues && window._wirePIDLiveValues(svgEl);
       }
       window._pidCurrentFile = filename;
       const label = document.getElementById('pidLabel');
       if (label) label.textContent = filename;
-      window.showNotif?.(`Operación unitaria "${filename}" cargada`, 'success');
+      window._updatePIDTagInfo && window._updatePIDTagInfo();
+      window._renderPIDFileList && window._renderPIDFileList();
+      if (typeof window._renderPropertyDashboard === 'function') setTimeout(window._renderPropertyDashboard, 150);
+      if (typeof window._checkIntegration === 'function') setTimeout(window._checkIntegration, 200);
+      window.showNotif?.(`Proceso unitario "${filename}" cargado`, 'success');
     }
   } catch (err) {
     window.showNotif?.('Error: ' + (err.message || err), 'danger');
@@ -936,56 +944,83 @@ window.deleteOpUnitSVG = async function(path, filename) {
 };
 
 window.openOpUnitModal = async function() {
+  // Cerrar si ya está abierto
+  let existing = document.getElementById('opUnitDropdown');
+  if (existing) { existing.remove(); return; }
+
   const { path, files } = await window.listOpUnitSVGs();
+  const btn = document.getElementById('pidOpUnitBtn');
+  if (!btn) return;
 
-  let modalEl = document.getElementById('opUnitModal');
-  if (!modalEl) {
-    modalEl = document.createElement('div');
-    modalEl.id = 'opUnitModal';
-    modalEl.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1050;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px)';
-    document.body.appendChild(modalEl);
-  }
+  const dropdown = document.createElement('div');
+  dropdown.id = 'opUnitDropdown';
+  Object.assign(dropdown.style, {
+    position:'absolute', zIndex:2000,
+    background:'rgba(28,28,38,0.97)',
+    border:'1px solid rgba(255,255,255,0.08)',
+    borderRadius:'12px', padding:'8px',
+    boxShadow:'0 8px 32px rgba(0,0,0,0.6)',
+    backdropFilter:'blur(12px)',
+    minWidth:'280px', maxWidth:'360px',
+    display:'flex', flexDirection:'column', gap:'4px'
+  });
 
-  const uploadBar = `
-    <div style="display:flex;gap:8px;margin-bottom:14px">
-      <button id="opUnitUploadBtn" class="btn btn-sm" style="flex:1;background:var(--primary,#3b82f6);color:#fff;border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:600;cursor:pointer">📤 Subir archivo .svg</button>
+  const listHTML = files.length === 0
+    ? `<div style="padding:16px 10px;text-align:center;color:var(--text-secondary);font-size:12px">No hay diagramas de proceso unitario. Sube uno.</div>`
+    : `<div style="display:flex;flex-direction:column;gap:3px;max-height:280px;overflow-y:auto">${files.map((f, i) => `
+        <div style="display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:8px;cursor:pointer;transition:all 0.12s;background:${i%2===0?'rgba(255,255,255,0.02)':'transparent'}"
+             onmouseenter="this.style.background='rgba(59,130,246,0.12)'"
+             onmouseleave="this.style.background='${i%2===0?'rgba(255,255,255,0.02)':'transparent'}'"
+             onclick="window.loadOpUnitSVG('${path}','${f.name.replace(/'/g,"\\'")}');document.getElementById('opUnitDropdown').remove()">
+          <span style="font-size:16px;flex-shrink:0">📐</span>
+          <span style="flex:1;font-size:12px;font-family:'JetBrains Mono',monospace;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f.name}</span>
+          <span style="font-size:10px;color:var(--text-disabled);flex-shrink:0">${f.size ? (f.size/1024).toFixed(0)+'KB' : ''}</span>
+        </div>`).join('')}</div>`;
+
+  dropdown.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 6px 8px 6px;border-bottom:1px solid rgba(255,255,255,0.06)">
+      <span style="font-size:12px;font-weight:600;color:var(--text-heading)">📂 Procesos Unitarios</span>
+      <span style="font-size:11px;color:var(--text-disabled)">${files.length} archivos</span>
+    </div>
+    ${listHTML}
+    <div style="margin-top:4px;padding:6px 4px 0 4px;border-top:1px solid rgba(255,255,255,0.06)">
+      <button id="opUnitUploadBtn" style="width:100%;background:rgba(59,130,246,0.1);color:#60a5fa;border:1px dashed rgba(59,130,246,0.3);border-radius:8px;padding:6px;font-size:11px;cursor:pointer;transition:all 0.12s"
+              onmouseenter="this.style.background='rgba(59,130,246,0.2)'"
+              onmouseleave="this.style.background='rgba(59,130,246,0.1)'">+ Subir nuevo SVG</button>
       <input type="file" id="opUnitUploadInput" accept=".svg,image/svg+xml" style="display:none" />
     </div>`;
 
-  const listHTML = files.length === 0
-    ? `<p style="color:var(--text-secondary);font-size:13px;margin:8px 0;text-align:center">No hay archivos .svg en <code>${path}</code>. Sube uno para empezar.</p>`
-    : `<div style="display:flex;flex-direction:column;gap:8px;max-height:340px;overflow-y:auto">${files.map(f => `
-        <div style="padding:10px 12px;border:1px solid var(--border-subtle);border-radius:8px;display:flex;align-items:center;gap:12px">
-          <div style="flex:1;display:flex;align-items:center;gap:10px;cursor:pointer"
-               onclick="window.loadOpUnitSVG('${path}','${f.name.replace(/'/g,"\\'")}');document.getElementById('opUnitModal').remove()">
-            <span style="font-size:20px">⚙️</span>
-            <div>
-              <div style="font-size:13px;font-weight:500;color:var(--text-primary)">${f.name}</div>
-              <div style="font-size:11px;color:var(--text-disabled)">${f.size ? (f.size/1024).toFixed(1) + ' KB SVG' : 'Operación unitaria'}</div>
-            </div>
-          </div>
-          <button title="Eliminar" onclick="event.stopPropagation();window.deleteOpUnitSVG('${path}','${f.name.replace(/'/g,"\\'")}')"
-            style="background:transparent;border:1px solid rgba(239,68,68,0.3);color:#f87171;border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer">🗑</button>
-        </div>`).join('')}</div>`;
+  // Posicionar debajo del botón
+  const toolbar = document.getElementById('pidToolbar');
+  if (toolbar && toolbar.contains(btn)) {
+    toolbar.style.position = 'relative';
+    toolbar.appendChild(dropdown);
+  } else {
+    dropdown.style.position = 'fixed';
+    document.body.appendChild(dropdown);
+  }
 
-  modalEl.innerHTML = `
-  <div style="background:var(--bg-elevated);border:1px solid var(--border-default);border-radius:16px;padding:24px;width:520px;max-width:95vw">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-      <h5 style="margin:0;font-size:16px;color:var(--text-heading)">Operaciones Unitarias (.svg)</h5>
-      <button onclick="document.getElementById('opUnitModal').remove()" style="background:none;border:none;color:var(--text-secondary);cursor:pointer;font-size:18px">×</button>
-    </div>
-    ${uploadBar}
-    ${listHTML}
-    <div style="margin-top:16px;text-align:right"><button class="btn btn-outline-secondary btn-sm" onclick="document.getElementById('opUnitModal').remove()">Cerrar</button></div>
-  </div>`;
-  modalEl.style.display = 'flex';
+  const br = btn.getBoundingClientRect();
+  const pr = (toolbar || document.body).getBoundingClientRect();
+  dropdown.style.left = (br.left - pr.left) + 'px';
+  dropdown.style.top = (br.bottom - pr.top + 4) + 'px';
 
-    const inp = document.getElementById('opUnitUploadInput');
-    const btn = document.getElementById('opUnitUploadBtn');
-    if (btn && inp) {
-      btn.onclick = () => inp.click();
-      inp.onchange = e => { const f = e.target.files?.[0]; if (f) window.uploadOpUnitFile(f); e.target.value=''; };
-    }
+  const inp = document.getElementById('opUnitUploadInput');
+  const upBtn = document.getElementById('opUnitUploadBtn');
+  if (upBtn && inp) {
+    upBtn.onclick = () => inp.click();
+    inp.onchange = e => { const f = e.target.files?.[0]; if (f) { window.uploadOpUnitFile(f); } e.target.value=''; };
+  }
+
+  // Cerrar al hacer clic fuera
+  setTimeout(function() {
+    document.addEventListener('click', function _close(e) {
+      if (!dropdown.contains(e.target) && e.target !== btn) {
+        dropdown.remove();
+        document.removeEventListener('click', _close);
+      }
+    });
+  }, 0);
 };
 
 // ─── TAG INFO ─────────────────────────────────────────────────────
