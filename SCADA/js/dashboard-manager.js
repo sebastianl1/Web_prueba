@@ -186,18 +186,67 @@ function _renderPropertyDashboard() {
   _startLive();
 }
 
-function _getTheoreticalDisplayValue(varId) {
+window._theoCycleIndex = {};
+
+function _isQuantitative(p) {
+  if (!p || p.value == null) return false;
+  const v = String(p.value).trim();
+  if (!v || v === '--') return false;
+  // Solo valores puramente numéricos (ej: "180", "60", "0.5", "5.05") o rangos simples sin texto
+  // Excluir: "Listo para...", "Agua", "15 – 20", "4.8 → 7.5", "> 95", "< 0.05", "--"
+  return /^[\d.,]+\s*$/.test(v) || /^[\d.,]+\s*[–-]\s*[\d.,]+\s*$/.test(v);
+}
+
+function _getAllPropsFlat(varId) {
   const db = window.TAG_PROPERTIES_DB || {};
   const props = db[varId];
-  if (!props) return { value: varId, unit: '' };
-  const priority = ['physical', 'process', 'chemical'];
-  for (const cat of priority) {
-    if (props[cat] && props[cat].length > 0) {
-      const p = props[cat][0];
-      return { value: p.value, unit: p.unit };
-    }
-  }
-  return { value: varId, unit: '' };
+  if (!props) return [];
+  return [
+    ...(props.physical || []),
+    ...(props.chemical || []),
+    ...(props.process || []),
+  ].filter(_isQuantitative);
+}
+
+function _inferUnitFromLabel(label) {
+  const l = (label || '').toLowerCase();
+  if (l.includes('temperatur')) return '°C';
+  if (l.includes('presion') || l.includes('presión') || l.includes('delta') || l.includes('dp')) return 'bar';
+  if (l.includes('caudal') || l.includes('flujo')) return 'L/min';
+  if (l.includes('nivel')) return '%';
+  if (l.includes('volumen') || l.includes('capacidad') || l.includes('salida') || l.includes('entrada')) return 'L';
+  if (l.includes('concentracion') || l.includes('concentración') || l.includes('molar')) return 'M';
+  if (l.includes('pureza') || l.includes('porcentaje') || l.includes('%')) return '%';
+  if (l.includes('ph')) return 'pH';
+  if (l.includes('densidad')) return 'kg/m³';
+  if (l.includes('viscosidad')) return 'cP';
+  if (l.includes('acidez') || l.includes('indice')) return 'mg KOH/g';
+  if (l.includes('agua') || l.includes('humedad')) return '%';
+  if (l.includes('energia') || l.includes('energía') || l.includes('calor')) return 'GJ';
+  if (l.includes('potencia') || l.includes('kw') || l.includes('hp')) return 'kW';
+  if (l.includes('velocidad')) return 'm/s';
+  if (l.includes('corriente')) return 'A';
+  if (l.includes('voltaje') || l.includes('tension') || l.includes('tensión')) return 'VDC';
+  if (l.includes('tiempo')) return 'min';
+  return '';
+}
+
+function _getTheoreticalDisplayValue(varId) {
+  const all = _getAllPropsFlat(varId);
+  if (!all.length) return { value: varId, unit: '' };
+  if (window._theoCycleIndex[varId] == null) window._theoCycleIndex[varId] = 0;
+  const idx = window._theoCycleIndex[varId] % all.length;
+  const p = all[idx];
+  const unit = (p.unit && p.unit.trim()) || _inferUnitFromLabel(p.label);
+  return { value: p.value, unit: unit, label: p.label };
+}
+
+function _advanceCycleIndex() {
+  const db = window.TAG_PROPERTIES_DB || {};
+  Object.keys(db).forEach(function(varId) {
+    if (window._theoCycleIndex[varId] == null) window._theoCycleIndex[varId] = 0;
+    window._theoCycleIndex[varId]++;
+  });
 }
 
 function _buildCard(varId, props, detected, catColor) {
@@ -282,6 +331,7 @@ function _buildCard(varId, props, detected, catColor) {
 
 // ═══ LIVE UPDATE ════════════════════════════════════════════════
 function _updateCards() {
+  _advanceCycleIndex();
   var detected = _getDetectedVars();
   window._dashboardDetectedVars = detected;
 
@@ -290,8 +340,7 @@ function _updateCards() {
     if (!varId) return;
     var isDetected = detected.indexOf(varId) !== -1;
     var theoretical = _getTheoreticalDisplayValue(varId);
-    var props = window.TAG_PROPERTIES_DB && window.TAG_PROPERTIES_DB[varId];
-    var unit = theoretical.unit || (props && props.unit) || '';
+    var unit = theoretical.unit || '';
 
     // Borde superior
     card.style.borderTopColor = isDetected ? '#22c55e' : 'transparent';
@@ -316,6 +365,12 @@ function _updateCards() {
       numEl.textContent = theoretical.value;
       var unitEl = card.querySelector('.dash-card-unit');
       if (unitEl) unitEl.textContent = unit;
+    }
+
+    // Descripción con la propiedad actual
+    var descEl = card.querySelector('.dash-card-desc');
+    if (descEl && theoretical.label) {
+      descEl.textContent = theoretical.label;
     }
 
     // Estado - Teórico fijo

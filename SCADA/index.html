@@ -21,9 +21,10 @@
   <link rel="stylesheet" href="css/scada-core.css">
   <!-- Login modal — lightweight responsive styles -->
   <style>
+    body.login-open { overflow:hidden; }
     #loginModal { position:fixed; inset:0; z-index:9999; display:grid; grid-template-columns:1fr; font-family:'Inter',sans-serif; background:#0d1117; }
     #loginModal .login-bg-panel { display:none; position:relative; overflow:hidden; min-width:0; }
-    #loginModal .login-form-panel { display:flex; align-items:center; justify-content:center; background:#0d1117; padding:16px; min-width:0; overflow-y:auto; }
+    #loginModal .login-form-panel { display:flex; align-items:center; justify-content:center; background:#0d1117; padding:16px; min-width:0; overflow:hidden; }
     #loginModal .login-form-inner { width:100%; max-width:320px; }
     @media (min-width: 900px) {
       #loginModal { grid-template-columns:1.2fr 1fr; }
@@ -230,7 +231,7 @@
 
       // ── items pool ──
       var items = [];
-      var names = ['SEBASTIAN','PAOLA','YENEVID'];
+      var names = ['SEBASTIAN','YENEVID','PAOLA','GRUPO_3'];
 
       function init() {
         items.length = 0;
@@ -262,27 +263,26 @@
           });
         }
 
-        // names — solo 3, mas pequeños
-        var posiciones = [
-          {x: W*0.15, y: H*0.08},
-          {x: W*0.85, y: H*0.92},
-          {x: W*0.5, y: H*0.5},
+        // names — 4, uno en cada esquina, oscilando suavemente
+        var corners = [
+          {x: W*0.14, y: H*0.10},
+          {x: W*0.86, y: H*0.10},
+          {x: W*0.14, y: H*0.92},
+          {x: W*0.86, y: H*0.92},
         ];
-        var shuffled = names.slice();
-        for (var i=shuffled.length-1;i>0;i--) {
-          var j=Math.floor(Math.random()*(i+1));
-          var tmp=shuffled[i];shuffled[i]=shuffled[j];shuffled[j]=tmp;
-        }
-        posiciones.forEach(function(r,i) {
-          if (i >= shuffled.length) return;
+        names.forEach(function(n,i) {
+          if (i >= corners.length) return;
+          var c = corners[i];
           items.push({
-            x: r.x, y: r.y,
-            vx: (Math.random()-0.5)*0.08, vy: (Math.random()-0.5)*0.08,
+            anchorX: c.x, anchorY: c.y,
+            x: c.x, y: c.y,
             rot: 0, rotV: 0,
             pulse: Math.random()*Math.PI*2,
+            phaseX: Math.random()*Math.PI*2,
+            phaseY: Math.random()*Math.PI*2,
             alpha: 0.35+Math.random()*0.1, hue: 140+Math.floor(Math.random()*20),
             glow: 6+Math.random()*4, size: 1,
-            type: 'name', txt: shuffled[i]
+            type: 'name', txt: n
           });
         });
 
@@ -320,11 +320,18 @@
         }
 
         items.forEach(function(it) {
-          it.x += it.vx; it.y += it.vy;
+          if (it.type === 'name') {
+            it.x = it.anchorX + Math.sin(it.pulse * 0.6 + it.phaseX) * 10;
+            it.y = it.anchorY + Math.cos(it.pulse * 0.5 + it.phaseY) * 8;
+          } else {
+            it.x += it.vx; it.y += it.vy;
+          }
           it.rot += it.rotV; it.pulse += 0.005;
           var pad = 200;
-          if (it.x < -pad) it.x = W+pad; if (it.x > W+pad) it.x = -pad;
-          if (it.y < -pad) it.y = H+pad; if (it.y > H+pad) it.y = -pad;
+          if (it.type !== 'name') {
+            if (it.x < -pad) it.x = W+pad; if (it.x > W+pad) it.x = -pad;
+            if (it.y < -pad) it.y = H+pad; if (it.y > H+pad) it.y = -pad;
+          }
 
           var a = it.alpha * (1 + 0.15*Math.sin(it.pulse));
           var color = 'hsla('+(it.hue + 10*Math.sin(it.pulse*0.5))+',75%,50%,1)';

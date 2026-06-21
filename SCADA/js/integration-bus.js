@@ -206,18 +206,56 @@
     return p;
   }
 
+  function _inferUnitFromLabel(label) {
+    const l = (label || '').toLowerCase();
+    if (l.includes('temperatur')) return '°C';
+    if (l.includes('presion') || l.includes('presión') || l.includes('delta') || l.includes('dp')) return 'bar';
+    if (l.includes('caudal') || l.includes('flujo')) return 'L/min';
+    if (l.includes('nivel')) return '%';
+    if (l.includes('volumen') || l.includes('capacidad') || l.includes('salida') || l.includes('entrada')) return 'L';
+    if (l.includes('concentracion') || l.includes('concentración') || l.includes('molar')) return 'M';
+    if (l.includes('pureza') || l.includes('porcentaje') || l.includes('%')) return '%';
+    if (l.includes('ph')) return 'pH';
+    if (l.includes('densidad')) return 'kg/m³';
+    if (l.includes('viscosidad')) return 'cP';
+    if (l.includes('acidez') || l.includes('indice')) return 'mg KOH/g';
+    if (l.includes('agua') || l.includes('humedad')) return '%';
+    if (l.includes('energia') || l.includes('energía') || l.includes('calor')) return 'GJ';
+    if (l.includes('potencia') || l.includes('kw') || l.includes('hp')) return 'kW';
+    if (l.includes('velocidad')) return 'm/s';
+    if (l.includes('corriente')) return 'A';
+    if (l.includes('voltaje') || l.includes('tension') || l.includes('tensión')) return 'VDC';
+    if (l.includes('tiempo')) return 'min';
+    return '';
+  }
+
   function _getInspectorDisplayValue(varId) {
+    const all = _getAllInspectorPropsFlat(varId);
+    if (!all.length) return { value: varId, unit: '', label: '' };
+    if (window._theoCycleIndex == null) window._theoCycleIndex = {};
+    if (window._theoCycleIndex[varId] == null) window._theoCycleIndex[varId] = 0;
+    const idx = window._theoCycleIndex[varId] % all.length;
+    const p = all[idx];
+    const unit = (p.unit && p.unit.trim()) || _inferUnitFromLabel(p.label);
+    return { value: p.value, unit: unit, label: p.label };
+  }
+
+  function _isQuantitative(p) {
+    if (!p || p.value == null) return false;
+    const v = String(p.value).trim();
+    if (!v || v === '--') return false;
+    return /^[\d.,]+\s*$/.test(v) || /^[\d.,]+\s*[–-]\s*[\d.,]+\s*$/.test(v);
+  }
+
+  function _getAllInspectorPropsFlat(varId) {
     const db = window.TAG_PROPERTIES_DB || {};
     const props = db[varId];
-    if (!props) return { value: varId, unit: '' };
-    const priority = ['physical', 'process', 'chemical'];
-    for (const cat of priority) {
-      if (props[cat] && props[cat].length > 0) {
-        const p = props[cat][0];
-        return { value: p.value, unit: p.unit };
-      }
-    }
-    return { value: varId, unit: '' };
+    if (!props) return [];
+    return [
+      ...(props.physical || []),
+      ...(props.chemical || []),
+      ...(props.process || []),
+    ].filter(_isQuantitative);
   }
 
   function renderInspector(v, source) {
@@ -226,13 +264,16 @@
     p.querySelector('#tagInspectorTag').textContent  = v.tag || v.id;
     p.querySelector('#tagInspectorDesc').textContent = v.desc || v.id || '';
 
-    // Engineering property / transport law from theoretical framework
     const db = window.TAG_PROPERTIES_DB || {};
     const props = db[v.id];
     const lawEl = document.getElementById('tagInspectorLaw');
     if (lawEl) {
-      const firstProp = props && (props.physical && props.physical[0] || props.process && props.process[0] || props.chemical && props.chemical[0]);
-      lawEl.textContent = firstProp ? `${firstProp.value} ${firstProp.unit}` : '';
+      const all = _getAllInspectorPropsFlat(v.id);
+      if (window._theoCycleIndex == null) window._theoCycleIndex = {};
+      const idx = (window._theoCycleIndex[v.id] || 0) % (all.length || 1);
+      const current = all[idx];
+      const unit = current ? ((current.unit && current.unit.trim()) || _inferUnitFromLabel(current.label)) : '';
+      lawEl.textContent = current ? `${current.label}: ${current.value} ${unit}` : '';
     }
 
     const tv = _getInspectorDisplayValue(v.id);
@@ -250,16 +291,18 @@
   function updateInspectorValue() {
     if (!activeVar) return;
     const valEl = document.getElementById('tagInspectorVal');
+    const unitEl = document.getElementById('tagInspectorUnit');
     const timeEl = document.getElementById('tagInspectorTime');
     if (!valEl) return;
     const tv = _getInspectorDisplayValue(activeVar.id);
     valEl.textContent = tv.value;
+    if (unitEl) unitEl.textContent = tv.unit;
     if (timeEl) {
-      timeEl.textContent = '📋 Marco teórico';
+      timeEl.textContent = tv.label ? '📋 ' + tv.label : '📋 Marco teórico';
     }
   }
-  // Sin refresco en vivo — valor estático del marco teórico
-  // setInterval(updateInspectorValue, 1500);
+  // Refresco cada 2s para seguir el ciclo del dashboard
+  setInterval(updateInspectorValue, 2000);
 
   // ───── Listener principal ──────────────────────────────────────
   bus.on('tag:select', (detail) => {

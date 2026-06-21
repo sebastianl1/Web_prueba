@@ -182,7 +182,7 @@ window.doLogin = function() {
     if (modal) {
       modal.style.transition = 'opacity 0.4s ease';
       modal.style.opacity = '0';
-      setTimeout(() => { modal.style.display = 'none'; }, 400);
+      setTimeout(() => { modal.style.display = 'none'; document.body.classList.remove('login-open'); }, 400);
     }
     // initApp viene de scada-core.js
     if (typeof initApp === 'function') initApp();
@@ -215,6 +215,8 @@ document.addEventListener('DOMContentLoaded', () => {
   window.addEventListener('unhandledrejection', function(e) {
     console.error('Unhandled rejection:', e.reason);
   });
+  document.body.classList.add('login-open');
+
   // Enter en contraseña
   const passInput = document.getElementById('loginPass');
   if (passInput) {

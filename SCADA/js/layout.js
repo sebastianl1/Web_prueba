@@ -45,6 +45,14 @@ window.showTab = function(tabId) {
   const bcEl = document.getElementById('breadcrumbCurrent');
   if (bcEl) bcEl.innerText = tabId.charAt(0).toUpperCase() + tabId.slice(1);
 
+  // Scroll al centro al entrar a P&ID
+  if (tabId === 'process') {
+    setTimeout(function() {
+      var pidContainer = document.getElementById('pidContainer');
+      if (pidContainer) pidContainer.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }, 100);
+  }
+
   // Acciones por tab
   if (tabId === 'files' && typeof window.refreshFiles === 'function') window.refreshFiles();
   if (tabId === 'config' && typeof window.setConfigSubTab === 'function') {
