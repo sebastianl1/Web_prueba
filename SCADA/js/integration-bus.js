@@ -206,35 +206,42 @@
     return p;
   }
 
+  function _getInspectorDisplayValue(varId) {
+    const db = window.TAG_PROPERTIES_DB || {};
+    const props = db[varId];
+    if (!props) return { value: varId, unit: '' };
+    const priority = ['physical', 'process', 'chemical'];
+    for (const cat of priority) {
+      if (props[cat] && props[cat].length > 0) {
+        const p = props[cat][0];
+        return { value: p.value, unit: p.unit };
+      }
+    }
+    return { value: varId, unit: '' };
+  }
+
   function renderInspector(v, source) {
     const p = ensurePanel();
     p.style.display = 'block';
     p.querySelector('#tagInspectorTag').textContent  = v.tag || v.id;
     p.querySelector('#tagInspectorDesc').textContent = v.desc || v.id || '';
 
-    // Engineering property / transport law
-    const pv = window.processVars && window.processVars[v.id];
+    // Engineering property / transport law from theoretical framework
+    const db = window.TAG_PROPERTIES_DB || {};
+    const props = db[v.id];
     const lawEl = document.getElementById('tagInspectorLaw');
     if (lawEl) {
-      lawEl.textContent = pv && pv.transportLaw ? '⚗ ' + pv.transportLaw : '';
+      const firstProp = props && (props.physical && props.physical[0] || props.process && props.process[0] || props.chemical && props.chemical[0]);
+      lawEl.textContent = firstProp ? `${firstProp.value} ${firstProp.unit}` : '';
     }
 
-    p.querySelector('#tagInspectorUnit').textContent = v.unit || '';
+    const tv = _getInspectorDisplayValue(v.id);
+    p.querySelector('#tagInspectorUnit').textContent = tv.unit;
     p.querySelector('#tagInspectorSrc').textContent  = source ? 'desde ' + source : '';
 
-    // Range display
     const rangeEl = document.getElementById('tagInspectorRange');
     if (rangeEl) {
-      const min = pv && pv.min != null ? pv.min : v.min;
-      const max = pv && pv.max != null ? pv.max : v.max;
-      const engProp = pv && pv.engProperty ? pv.engProperty : '';
-      if (min != null && max != null) {
-        rangeEl.textContent = `${engProp ? engProp + ' • ' : ''}Rango: ${min} – ${max} ${v.unit || ''}`;
-      } else if (engProp) {
-        rangeEl.textContent = engProp;
-      } else {
-        rangeEl.textContent = '';
-      }
+      rangeEl.textContent = '';
     }
 
     updateInspectorValue();
@@ -245,20 +252,14 @@
     const valEl = document.getElementById('tagInspectorVal');
     const timeEl = document.getElementById('tagInspectorTime');
     if (!valEl) return;
-    const pv = window.processVars && window.processVars[activeVar.id];
-    if (pv && pv.val != null) {
-      const n = Number(pv.val);
-      valEl.textContent = isNaN(n) ? String(pv.val) : n.toFixed(2);
-      if (timeEl) {
-        timeEl.textContent = '🕐 ' + (pv.time || '');
-      }
-    } else {
-      valEl.textContent = '--';
-      if (timeEl) timeEl.textContent = '';
+    const tv = _getInspectorDisplayValue(activeVar.id);
+    valEl.textContent = tv.value;
+    if (timeEl) {
+      timeEl.textContent = '📋 Marco teórico';
     }
   }
-  // Refresco en vivo del valor
-  setInterval(updateInspectorValue, 1500);
+  // Sin refresco en vivo — valor estático del marco teórico
+  // setInterval(updateInspectorValue, 1500);
 
   // ───── Listener principal ──────────────────────────────────────
   bus.on('tag:select', (detail) => {

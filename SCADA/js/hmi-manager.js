@@ -92,7 +92,7 @@
       text.setAttribute('data-live-tag', tag);
       text.setAttribute('data-live-var', varId);
       text.setAttribute('filter', 'drop-shadow(0 0 4px rgba(0,0,0,0.8))');
-      text.textContent = tag + ': --';
+      text.textContent = tag + ': ' + _getHMITheoreticalValue(varId);
 
       if (el.parentNode) {
         el.parentNode.insertBefore(text, el.nextSibling);
@@ -110,33 +110,35 @@
     if (el) el.textContent = String(count);
   }
 
+  function _getHMITheoreticalValue(varId) {
+    const db = window.TAG_PROPERTIES_DB || {};
+    const props = db[varId];
+    if (!props) return '--';
+    const priority = ['physical', 'process', 'chemical'];
+    for (const cat of priority) {
+      if (props[cat] && props[cat].length > 0) {
+        return props[cat][0].value + ' ' + props[cat][0].unit;
+      }
+    }
+    return '--';
+  }
+
   function _updateLiveOverlays() {
-    const pv = window.processVars || {};
     _overlays.forEach(text => {
       const tag = text.getAttribute('data-live-tag');
       const varId = text.getAttribute('data-live-var');
       if (!tag && !varId) return;
-      let info = varId && pv[varId] ? pv[varId] : pv[tag];
-      if (info && info.val != null) {
-        const n = Number(info.val);
-        text.textContent = (isNaN(n) ? info.val : n.toFixed(1)) + (info.unit ? ' ' + info.unit : '');
-      } else {
-        text.textContent = (varId || tag) + ': --';
-      }
+      const display = _getHMITheoreticalValue(varId || tag);
+      text.textContent = (varId || tag) + ': ' + display;
     });
 
-    // Colorear elementos SVG según estado de alarma
+    // Colorear elementos SVG (sin alarmas — valores teóricos)
     const container = getContainer();
     if (!container) return;
     container.querySelectorAll('[data-scada-var]').forEach(el => {
-      const varId = el.getAttribute('data-scada-var');
-      const info = pv[varId];
-      if (!info || info.val == null) return;
-      const val = Number(info.val);
-      if (isNaN(val)) return;
-      const max = info.max != null ? info.max : 100;
-      const min = info.min != null ? info.min : 0;
-      const inAlarm = val > max || val < min;
+      el.style.stroke = '';
+      el.style.strokeWidth = '';
+    });
 
       if (!el.hasAttribute('data-orig-fill') && el.getAttribute('fill')) {
         el.setAttribute('data-orig-fill', el.getAttribute('fill'));

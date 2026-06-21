@@ -186,25 +186,38 @@ function _renderPropertyDashboard() {
   _startLive();
 }
 
+function _getTheoreticalDisplayValue(varId) {
+  const db = window.TAG_PROPERTIES_DB || {};
+  const props = db[varId];
+  if (!props) return { value: varId, unit: '' };
+  const priority = ['physical', 'process', 'chemical'];
+  for (const cat of priority) {
+    if (props[cat] && props[cat].length > 0) {
+      const p = props[cat][0];
+      return { value: p.value, unit: p.unit };
+    }
+  }
+  return { value: varId, unit: '' };
+}
+
 function _buildCard(varId, props, detected, catColor) {
-  var live = _getLiveVal(varId);
+  var theoretical = _getTheoreticalDisplayValue(varId);
   var isDetected = detected.indexOf(varId) !== -1;
   var name = (props && props.label) || varId;
   var desc = (props && props.description) || '';
-  var unit = (props && props.unit) || '';
+  var unit = theoretical.unit || (props && props.unit) || '';
   var icon = VAR_ICONS[varId] || 'circle';
 
-  var valDisplay = live != null ? (typeof live === 'number' ? live.toFixed(1) : live) : '--';
-  var valUnit = live != null ? unit : '';
+  var valDisplay = theoretical.value;
+  var valUnit = theoretical.unit;
 
   var borderColor = isDetected ? '#22c55e' : 'transparent';
-  var statusLabel = live != null ? 'Normal' : 'Sin datos';
-  var statusColor = live != null ? 'var(--accent-green)' : 'var(--text-dim)';
-  var dotColor = live != null ? '#22c55e' : 'var(--text-dim)';
+  var statusLabel = 'Teórico';
+  var statusColor = 'var(--accent-cyan)';
+  var dotColor = 'var(--accent-cyan)';
 
   var html = '<div class="dash-card" data-var-id="' + varId + '" style="border-top:2px solid ' + borderColor + '">';
 
-  // Header: icono + ID + badge + valor
   html += '<div class="dash-card-top">';
   html += '<i data-feather="' + icon + '" style="width:18px;height:18px;color:' + catColor + ';stroke-width:1.5;flex-shrink:0"></i>';
   html += '<div class="dash-card-id">' + varId + '</div>';
@@ -276,9 +289,9 @@ function _updateCards() {
     var varId = card.dataset.varId;
     if (!varId) return;
     var isDetected = detected.indexOf(varId) !== -1;
-    var live = _getLiveVal(varId);
+    var theoretical = _getTheoreticalDisplayValue(varId);
     var props = window.TAG_PROPERTIES_DB && window.TAG_PROPERTIES_DB[varId];
-    var unit = (props && props.unit) || '';
+    var unit = theoretical.unit || (props && props.unit) || '';
 
     // Borde superior
     card.style.borderTopColor = isDetected ? '#22c55e' : 'transparent';
@@ -297,25 +310,19 @@ function _updateCards() {
       dot.remove();
     }
 
-    // Valor
+    // Valor teórico
     var numEl = card.querySelector('[data-live]');
     if (numEl) {
-      numEl.textContent = live != null ? (typeof live === 'number' ? live.toFixed(1) : live) : '--';
+      numEl.textContent = theoretical.value;
       var unitEl = card.querySelector('.dash-card-unit');
-      if (unitEl) unitEl.textContent = live != null ? unit : '';
+      if (unitEl) unitEl.textContent = unit;
     }
 
-    // Estado
+    // Estado - Teórico fijo
     var statusEl = card.querySelector('.dash-status');
     if (statusEl) {
-      var dot2 = statusEl.querySelector('.dash-status-dot');
-      if (live != null) {
-        statusEl.innerHTML = '<span class="dash-status-dot" style="background:#22c55e"></span>Normal';
-        statusEl.style.color = 'var(--accent-green)';
-      } else {
-        statusEl.innerHTML = '<span class="dash-status-dot" style="background:var(--text-dim)"></span>Sin datos';
-        statusEl.style.color = 'var(--text-dim)';
-      }
+      statusEl.innerHTML = '<span class="dash-status-dot" style="background:var(--accent-cyan)"></span>Teórico';
+      statusEl.style.color = 'var(--accent-cyan)';
     }
 
     // Botón P&ID
@@ -340,16 +347,12 @@ function _updateCards() {
 
   // Summary
   var totalOk = document.querySelectorAll('.dash-card-num[data-live]').length;
-  var totalLive = 0;
-  document.querySelectorAll('.dash-card-num[data-live]').forEach(function(el) {
-    if (el.textContent !== '--') totalLive++;
-  });
   var pidCount = detected.length;
   var bar = document.querySelector('.dash-bar');
   if (bar) {
     var items = bar.querySelectorAll('.dash-bar-item');
     if (items.length >= 3) {
-      items[1].innerHTML = '<span class="dash-bar-num" style="color:var(--accent-green)">' + totalLive + '</span> con datos';
+      items[1].innerHTML = '<span class="dash-bar-num" style="color:var(--accent-cyan)">' + totalOk + '</span> valores teóricos';
       items[2].innerHTML = '<span class="dash-bar-num" style="color:' + (pidCount > 0 ? 'var(--accent-green)' : 'var(--text-dim)') + '">' + pidCount + '</span> en P&amp;ID';
     }
   }

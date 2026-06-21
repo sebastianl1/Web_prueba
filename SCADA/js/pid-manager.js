@@ -677,20 +677,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 // ─── VALORES EN VIVO SOBRE SVG ────────────────────────────────────
 let _pidLiveInterval = null;
 function _getRelevantDisplayValue(tag) {
-  const displayValues = {
-    'TK-001': '891 L',
-    'FIL-001': '846 L',
-    'P-001': '3 HP',
-    'CLP-001': '24 VDC',
-    'TK-002': '834 L',
-    'SALACE-001': '834 L',
-    'TK-003': '180 L',
-    'TK-004': '5.05 kg',
-    'E-003': '180 L (0.5 M)',
-    'E.W-003': '10 L',
-    'ALCO-001': '180 L'
-  };
-  return displayValues[tag] || tag;
+  const db = window.TAG_PROPERTIES_DB || {};
+  const props = db[tag];
+  if (!props) return tag;
+  const priority = ['physical', 'process', 'chemical'];
+  for (const cat of priority) {
+    if (props[cat] && props[cat].length > 0) {
+      const p = props[cat][0];
+      return p.value + ' ' + p.unit;
+    }
+  }
+  return tag;
 }
 
 function _wirePIDLiveValues(svgEl) {
