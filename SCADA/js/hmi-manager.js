@@ -2,490 +2,885 @@
   if (window._hmiInitialized) return;
   window._hmiInitialized = true;
 
-  let _currentFile = null;
-  let _liveInterval = null;
-  let _overlays = [];
+  var _canvas = null;
+  var _currentView = 'pu1';
+  var _selectedTag = null;
+
+  var PU_INFO = {
+    pu1: { label: 'Caracterización de Materia Prima', icon: '\uD83D\uDEE5\uFE0F', short: 'PU1' },
+    pu2: { label: 'Esterificación y Transesterificación', icon: '\u2697\uFE0F', short: 'PU2' },
+    pu3: { label: 'Purificación y Producto Final', icon: '\uD83D\uDEE0\uFE0F', short: 'PU3' },
+  };
+
+  var SHAPE_ICONS = {
+    tank: '\uD83D\uDEE5\uFE0F', pump: '\uD83D\uDD04', reactor: '\u2697\uFE0F',
+    filter: '\uD83D\uDD0D', column: '\uD83C\uDFF3\uFE0F', separator: '\uD83D\uDEEB\uFE0F',
+    gauge: '\uD83D\uDD2C', panel: '\uD83D\uDCF1', system: '\u2699\uFE0F',
+    hex: '\uD83D\uDD25', valve: '\uD83D\uDD07', waste: '\uD83D\uDDD1\uFE0F',
+    product: '\uD83D\uDCE6', default: '\u2753',
+  };
 
   function getContainer() { return document.getElementById('hmiContainer'); }
-  function getLabelEl()   { return document.getElementById('hmiLabel'); }
+  window.listHMISVGs = async function () { return ['Process Diagram']; };
 
-  // ─── LISTAR SVGs ──────────────────────────────────────────────────
-  window.listHMISVGs = async function() {
-    try {
-      const res = await fetch('/api/files/list?path=/hmi');
-      if (!res.ok) return [];
-      const files = await res.json();
-      return files.filter(f => f.name && f.name.toLowerCase().endsWith('.svg'));
-    } catch { return []; }
-  };
+  // ─── HELPERS ──────────────────────────────────────────────────────
+  function _isQ(v) { return v != null && v !== '--' && v !== '' && /^[\d<>\-–.\s]+$/.test(String(v).trim()); }
 
-  // ─── CARGAR SVG ───────────────────────────────────────────────────
-  window.loadHMISVG = async function(filename) {
-    const container = getContainer();
-    if (!container) return;
-
-    container.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-secondary)">
-      <div class="spinner-border spinner-border-sm text-primary me-2"></div>
-      Cargando HMI: ${filename}...
-    </div>`;
-
-    try {
-      const res = await fetch(`/api/files/raw?path=/hmi&name=${encodeURIComponent(filename)}`);
-      if (!res.ok) throw new Error(`Error ${res.status}`);
-      const svgText = await res.text();
-
-      container.innerHTML = svgText;
-      const svgEl = container.querySelector('svg');
-      if (svgEl) {
-        svgEl.style.width  = '100%';
-        svgEl.style.height = '100%';
-        svgEl.style.maxHeight = 'calc(100vh - 200px)';
-        svgEl.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-        if (typeof window._normalizeSVGColors === 'function') window._normalizeSVGColors(svgEl);
-        _addHMIPanZoom(svgEl);
-        if (typeof window._wireSVGHotspots === 'function') window._wireSVGHotspots(svgEl);
-        _wireLiveValues(svgEl);
-      }
-
-    _currentFile = filename;
-    const label = getLabelEl();
-    if (label) label.textContent = filename;
-    _updateTagCount();
-    _updateHMITagInfo();
-    _renderHMIFileList();
-    if (typeof window._checkIntegration === 'function') setTimeout(window._checkIntegration, 200);
-    if (typeof window.showNotif === 'function') window.showNotif(`HMI "${filename}" cargado`, 'success');
-
-  } catch (err) {
-      container.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-secondary);padding:24px">
-        No se pudo cargar el archivo. (${err.message})</div>`;
-      if (typeof window.showNotif === 'function') window.showNotif(`Error: ${err.message}`, 'warning');
+  function _getDisplayValue(varId) {
+    var st = window.HMIStore && window.HMIStore.get(varId);
+    if (st && st.value != null) return { value: st.value, unit: st.unit || '', source: 'manual' };
+    var db = window.TAG_PROPERTIES_DB && window.TAG_PROPERTIES_DB[varId];
+    if (!db) return { value: '--', unit: '', source: 'none' };
+    for (var ci = 0; ci < 3; ci++) {
+      var cat = ['physical', 'chemical', 'process'][ci], arr = db[cat];
+      if (!arr) continue;
+      for (var pi = 0; pi < arr.length; pi++) { if (_isQ(arr[pi].value)) return { value: arr[pi].value, unit: arr[pi].unit || db.unit || '', source: cat }; }
     }
-  };
-
-  // ─── VALORES EN VIVO SOBRE SVG ───────────────────────────────────
-  function _wireLiveValues(svgEl) {
-    if (!svgEl) return;
-    _overlays = [];
-
-    const elList = svgEl.querySelectorAll('[data-tag]');
-    elList.forEach(el => {
-      const tag = el.getAttribute('data-tag');
-      if (!tag) return;
-
-      // Intentar resolver el tag a su ID canónico para mejor matching en processVars
-      const varId = el.getAttribute('data-scada-var') || tag;
-      el.setAttribute('data-scada-var', varId);
-
-      const bbox = el.getBBox ? el.getBBox() : null;
-      if (!bbox) return;
-
-      const ns = 'http://www.w3.org/2000/svg';
-      const text = document.createElementNS(ns, 'text');
-      text.setAttribute('x', bbox.x + bbox.width / 2);
-      text.setAttribute('y', bbox.y - 6);
-      text.setAttribute('text-anchor', 'middle');
-      text.setAttribute('font-family', "'JetBrains Mono',monospace");
-      text.setAttribute('font-size', '13');
-      text.setAttribute('font-weight', '600');
-      text.setAttribute('fill', '#22c55e');
-      text.setAttribute('data-live-tag', tag);
-      text.setAttribute('data-live-var', varId);
-      text.setAttribute('filter', 'drop-shadow(0 0 4px rgba(0,0,0,0.8))');
-      text.textContent = tag + ': ' + _getHMITheoreticalValue(varId);
-
-      if (el.parentNode) {
-        el.parentNode.insertBefore(text, el.nextSibling);
-      }
-      _overlays.push(text);
-    });
-
-    _updateLiveOverlays();
-
-    if (_liveInterval) clearInterval(_liveInterval);
-    _liveInterval = setInterval(_updateLiveOverlays, 2000);
-
-    const count = _overlays.length;
-    const el = document.getElementById('hmiTagCount');
-    if (el) el.textContent = String(count);
+    var fb = db.physical && db.physical[0];
+    return { value: fb ? fb.value : '--', unit: fb ? (fb.unit || db.unit || '') : (db.unit || ''), source: 'fallback' };
   }
 
-  function _getHMITheoreticalValue(varId) {
-    const db = window.TAG_PROPERTIES_DB || {};
-    const props = db[varId];
-    if (!props) return '--';
-    const priority = ['physical', 'process', 'chemical'];
-    for (const cat of priority) {
-      if (props[cat] && props[cat].length > 0) {
-        return props[cat][0].value + ' ' + props[cat][0].unit;
-      }
-    }
-    return '--';
+  function _getStatus(varId) {
+    if (window.HMIStore && window.HMIStore.get(varId)) return 'manual';
+    var p = window.TAG_PROPERTIES_DB && window.TAG_PROPERTIES_DB[varId];
+    if (!p || !p.alarms) return 'normal';
+    var v = parseFloat(p.physical && p.physical[0] && p.physical[0].value);
+    if (isNaN(v)) return 'normal';
+    var a = p.alarms;
+    if ((a.crit_max != null && v >= a.crit_max) || (a.crit_min != null && v <= a.crit_min)) return 'critical';
+    if ((a.max != null && v >= a.max) || (a.min != null && v <= a.min)) return 'warning';
+    return 'normal';
   }
 
-  function _updateLiveOverlays() {
-    _overlays.forEach(text => {
-      const tag = text.getAttribute('data-live-tag');
-      const varId = text.getAttribute('data-live-var');
-      if (!tag && !varId) return;
-      const display = _getHMITheoreticalValue(varId || tag);
-      text.textContent = (varId || tag) + ': ' + display;
-    });
-
-    // Colorear elementos SVG (sin alarmas — valores teóricos)
-    const container = getContainer();
-    if (!container) return;
-    container.querySelectorAll('[data-scada-var]').forEach(el => {
-      el.style.stroke = '';
-      el.style.strokeWidth = '';
-    });
-
-      if (!el.hasAttribute('data-orig-fill') && el.getAttribute('fill')) {
-        el.setAttribute('data-orig-fill', el.getAttribute('fill'));
-      }
-      if (!el.hasAttribute('data-orig-stroke') && el.getAttribute('stroke')) {
-        el.setAttribute('data-orig-stroke', el.getAttribute('stroke'));
-      }
-
-      if (inAlarm) {
-        el.setAttribute('stroke', 'rgba(239,68,68,0.6)');
-        el.setAttribute('stroke-width', '2');
-        el.setAttribute('data-alarm', '1');
-      } else {
-        const origS = el.getAttribute('data-orig-stroke');
-        if (origS) el.setAttribute('stroke', origS);
-        else el.removeAttribute('stroke');
-        el.setAttribute('stroke-width', '');
-        el.setAttribute('data-alarm', '0');
-        el.removeAttribute('data-alarm');
-      }
-    });
+  function _getShape(tagId) {
+    var EXACT = { TK_ACEITE:'tank',FILTRADO:'filter',BOMBEO:'pump',CONTROL_1:'panel',TK_ACE_FILTRADO:'tank',INT_CALOR:'hex',SIS_CIRCULACION:'system',SAL_ALCOXIDO:'valve',SAL_ACEITE:'valve' };
+    if (EXACT[tagId]) return EXACT[tagId];
+    var PREFIX = { 'E.W':'hex','SEC_COND':'column','SALACE':'valve','PRO_DES':'waste','PRO_FIN':'product','SIS_CIRC':'system','SIS_BOM':'system','SIS_TRAN':'system','SIS':'system','TK':'tank','FIL':'filter','P':'pump','CLP':'panel','E':'reactor','SEP':'separator','VIS':'gauge','SEC':'column','ALCO':'valve','GLI':'tank','TRAN':'reactor','EST':'reactor' };
+    var pkeys = Object.keys(PREFIX).sort(function (a, b) { return b.length - a.length; });
+    for (var i = 0; i < pkeys.length; i++) if (tagId.startsWith(pkeys[i])) return PREFIX[pkeys[i]];
+    return 'default';
   }
 
-  window._wireHMILiveValues = _wireLiveValues;
+  // ─── SUB-VARIABLE OVERRIDE STORE ──────────────────────────────
+  var _subVarOverrides = {};
+  var _originalValues = {};
+  var _revertTimers = {};
+  var REVERT_DELAY = 60000; // 60 seconds — values auto-revert after this
 
-  // ─── PAN/ZOOM PARA SVG ──────────────────────────────────────────
-  function _addHMIPanZoom(svg) {
-    const state = { scale: 1, panX: 0, panY: 0, rotation: 0 };
-    let isDragging = false, lastX = 0, lastY = 0;
-
-    svg.style.cursor = 'grab';
-    svg.style.transition = 'transform 0.08s ease';
-    svg.style.transformOrigin = 'center center';
-
-    function apply() {
-      svg.style.transform =
-        `translate(${state.panX}px, ${state.panY}px) rotate(${state.rotation}deg) scale(${state.scale})`;
-    }
-
-    svg.addEventListener('wheel', e => {
-      e.preventDefault();
-      state.scale = Math.max(0.2, Math.min(8, state.scale * (e.deltaY > 0 ? 0.9 : 1.1)));
-      apply();
-    }, { passive: false });
-
-    svg.addEventListener('mousedown', e => {
-      isDragging = true; lastX = e.clientX; lastY = e.clientY;
-      svg.style.cursor = 'grabbing';
-    });
-    window.addEventListener('mouseup', () => { isDragging = false; svg.style.cursor = 'grab'; });
-    window.addEventListener('mousemove', e => {
-      if (!isDragging) return;
-      state.panX += e.clientX - lastX; state.panY += e.clientY - lastY;
-      lastX = e.clientX; lastY = e.clientY;
-      apply();
-    });
-
-    window._hmiView = {
-      state, apply,
-      reset() { state.scale = 1; state.panX = 0; state.panY = 0; state.rotation = 0; apply(); },
-      zoom(factor) { state.scale = Math.max(0.2, Math.min(8, state.scale * factor)); apply(); },
-      rotate(deg)  { state.rotation = (state.rotation + deg) % 360; apply(); },
-      setRotation(deg) { state.rotation = deg % 360; apply(); },
-    };
-
-    const resetBtn = document.getElementById('hmiResetZoom');
-    if (resetBtn) resetBtn.onclick = () => window._hmiView.reset();
+  function _loadSubVarOverrides() {
+    try { var raw = localStorage.getItem('scada_hmi_subvars'); if (raw) _subVarOverrides = JSON.parse(raw); } catch (e) {}
   }
 
-  // ─── CONTADOR DE TAGS ───────────────────────────────────────────
-  function _updateTagCount() {
-    const container = getContainer();
-    if (!container) return;
-    const svg = container.querySelector('svg');
-    if (!svg) return;
-    const count = svg.querySelectorAll('[data-tag]').length;
-    const el = document.getElementById('hmiTagCount');
-    if (el) el.textContent = String(count);
+  function _saveSubVarOverrides() {
+    try { localStorage.setItem('scada_hmi_subvars', JSON.stringify(_subVarOverrides)); } catch (e) {}
   }
 
-  // ─── ACTUALIZAR ÚLTIMO VALOR DESDE TAG INSPECTOR ────────────────
-  if (window.scadaBus) {
-    window.scadaBus.on('tag:select', (detail) => {
-      const v = typeof window.scadaResolveVar === 'function' ? window.scadaResolveVar(detail) : null;
-      if (v && v.id) {
-        const pv = window.processVars && window.processVars[v.id];
-        const valEl = document.getElementById('hmiLastValue');
-        if (valEl) {
-          if (pv && pv.val != null) {
-            const n = Number(pv.val);
-            valEl.textContent = (isNaN(n) ? pv.val : n.toFixed(2)) + (pv.unit ? ' ' + pv.unit : '');
-          } else {
-            valEl.textContent = '--';
-          }
+  function _getSubVar(tagId, cat, key) {
+    var k = tagId + '|' + cat + '|' + key;
+    return _subVarOverrides[k] !== undefined ? _subVarOverrides[k] : null;
+  }
+
+  function _setSubVar(tagId, cat, key, value) {
+    var k = tagId + '|' + cat + '|' + key;
+
+    // Save original value first time only
+    if (!(k in _originalValues)) {
+      var p = window.TAG_PROPERTIES_DB && window.TAG_PROPERTIES_DB[tagId];
+      if (p && p[cat]) {
+        for (var i = 0; i < p[cat].length; i++) {
+          if (p[cat][i].key === key) { _originalValues[k] = p[cat][i].value; break; }
         }
       }
+    }
+
+    _subVarOverrides[k] = String(value);
+    _saveSubVarOverrides();
+
+    // Update TAG_PROPERTIES_DB in memory immediately
+    var p2 = window.TAG_PROPERTIES_DB && window.TAG_PROPERTIES_DB[tagId];
+    if (p2 && p2[cat]) {
+      for (var j = 0; j < p2[cat].length; j++) {
+        if (p2[cat][j].key === key) { p2[cat][j].value = String(value); break; }
+      }
+    }
+
+    // Update HMIStore so alarm system picks up the change
+    if (cat === 'physical' && key === (p2 && p2.physical && p2.physical[0] && p2.physical[0].key)) {
+      if (window.HMIStore) {
+        window.HMIStore.set(tagId, value, (p2 && p2.physical && p2.physical[0] && p2.physical[0].unit) || '');
+      }
+    }
+
+    // Schedule auto-revert for this tag (resets existing timer)
+    _scheduleRevert(tagId);
+  }
+
+  function _scheduleRevert(tagId) {
+    if (_revertTimers[tagId]) clearTimeout(_revertTimers[tagId]);
+    _revertTimers[tagId] = setTimeout(function () {
+      _revertTag(tagId);
+    }, REVERT_DELAY);
+  }
+
+  function _revertTag(tagId) {
+    delete _revertTimers[tagId];
+
+    // Remove all overrides for this tag
+    var keysToRemove = [];
+    for (var k in _subVarOverrides) {
+      if (k.startsWith(tagId + '|')) keysToRemove.push(k);
+    }
+    var self = this;
+    keysToRemove.forEach(function (k) { delete _subVarOverrides[k]; });
+    _saveSubVarOverrides();
+
+    // Restore original values in TAG_PROPERTIES_DB
+    var db = window.TAG_PROPERTIES_DB;
+    if (db && db[tagId]) {
+      for (var ok in _originalValues) {
+        if (ok.startsWith(tagId + '|')) {
+          var parts = ok.split('|');
+          var cat = parts[1], subKey = parts[2];
+          var p = db[tagId];
+          if (p && p[cat]) {
+            for (var i = 0; i < p[cat].length; i++) {
+              if (p[cat][i].key === subKey) {
+                p[cat][i].value = _originalValues[ok];
+                break;
+              }
+            }
+          }
+          delete _originalValues[ok];
+        }
+      }
+    }
+
+    // Clear HMIStore for this tag so alarm system sees original values
+    if (window.HMIStore) window.HMIStore.clear(tagId);
+
+    // Update UI
+    _updateStatusBar();
+    if (window.showNotif) window.showNotif(tagId + ' ha vuelto a valores normales', 'info');
+
+    // Force alarm re-evaluation within 1s
+    setTimeout(function () {
+      if (window.AlarmManager && typeof window.AlarmManager.evaluateAlarms === 'function') {
+        window.AlarmManager.evaluateAlarms();
+      }
+    }, 500);
+  }
+
+  function _clearAllSubVars() {
+    // Clear all pending revert timers
+    for (var tid in _revertTimers) { clearTimeout(_revertTimers[tid]); }
+    _revertTimers = {};
+    _subVarOverrides = {};
+    _originalValues = {};
+    try { localStorage.removeItem('scada_hmi_subvars'); } catch (e) {}
+  }
+
+  _loadSubVarOverrides();
+
+  // ─── GET EQUIPMENT TAGS PER PU ──────────────────────────────────
+  function _getEquipTags(view) {
+    var map = {
+      pu1: ['TK-001','FIL-001','P-001','TK-002','E.W-003','E-003','TK-003','TK-004','CLP-001','SALACE-001','ALCO-001'],
+      pu2: ['EST-001','TRAN-001','SEP-001','GLI-001','PRO_DES-001','SIS_TRAN-001','SIS_BOM-001'],
+      pu3: ['PRO_DES-003','PRO_FIN-001','SEC-001','SEC_COND-001','SIS_CIRC-001','VIS-001'],
+    };
+    return map[view] || [];
+  }
+
+  function _getEquipCount(view) {
+    var db = window.TAG_PROPERTIES_DB || {};
+    return _getEquipTags(view).filter(function (t) { return db[t]; }).length;
+  }
+
+  // ══════════════════════════════════════════════════════════════════
+  //  STYLES
+  // ══════════════════════════════════════════════════════════════════
+  function _injectStyles() {
+    if (document.getElementById('hmiVizStyle')) return;
+    var s = document.createElement('style');
+    s.id = 'hmiVizStyle';
+    s.textContent = [
+      /* ── WRAPPER ── */
+      '#hmiVizWrapper{display:flex;flex-direction:column;flex:1;min-height:0;width:100%;background:var(--bg-deep,#0b1121);font-family:Inter,system-ui,sans-serif;color:var(--text-primary,#e2e8f0);overflow:hidden}',
+      /* ── TOP BAR ── */
+      '#hmiTopBar{display:flex;align-items:center;gap:12px;padding:8px 16px;background:rgba(22,27,34,0.85);border-bottom:1px solid rgba(48,54,61,0.5);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);z-index:10;min-height:44px}',
+      '#hmiTopBar .hmi-bread{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-muted,#94a3b8)}',
+      '#hmiTopBar .hmi-bread .sep{color:rgba(148,163,184,0.3)}',
+      '#hmiTopBar .hmi-bread .cur{color:var(--accent-cyan,#22d3ee);font-weight:600}',
+      '#hmiTopBar .hmi-status{display:flex;align-items:center;gap:5px;margin-left:auto;font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px}',
+      '#hmiTopBar .hmi-status .dot{width:7px;height:7px;border-radius:50%;background:#22c55e;box-shadow:0 0 6px rgba(34,197,94,0.5);animation:pulse-dot 2s infinite}',
+      '@keyframes pulse-dot{0%,100%{opacity:1}50%{opacity:0.4}}',
+      '#hmiTopBar .hmi-zoom-group{display:flex;align-items:center;gap:3px;margin-left:12px}',
+      '#hmiTopBar .hmi-zoom-btn{width:28px;height:28px;display:flex;align-items:center;justify-content:center;background:rgba(48,54,61,0.3);border:1px solid rgba(48,54,61,0.5);border-radius:5px;color:var(--text-secondary);font-size:13px;cursor:pointer;transition:all 0.15s;user-select:none}',
+      '#hmiTopBar .hmi-zoom-btn:hover{background:rgba(48,54,61,0.6);color:var(--accent-cyan);border-color:rgba(34,211,238,0.3)}',
+      '#hmiTopBar .hmi-zoom-pct{font-size:11px;color:var(--text-muted);min-width:36px;text-align:center;font-family:JetBrains Mono,monospace}',
+      '#hmiTopBar .hmi-count-badge{font-size:10px;color:var(--text-muted);background:rgba(48,54,61,0.3);padding:2px 10px;border-radius:10px;white-space:nowrap}',
+      '#hmiTopBar .hmi-menu-btn{background:none;border:none;color:var(--text-secondary);font-size:16px;cursor:pointer;padding:4px;display:none}',
+      /* ── BODY ── */
+      '#hmiBody{display:flex;flex:1;min-height:0;position:relative;overflow:hidden}',
+      /* ── SIDEBAR ── */
+      '#hmiSidebar{width:160px;min-width:160px;display:flex;flex-direction:column;background:rgba(15,23,42,0.5);border-right:1px solid rgba(48,54,61,0.3);padding:8px 0;overflow-y:auto;z-index:5}',
+      '#hmiSidebar .hmi-nav-label{font-size:9px;text-transform:uppercase;letter-spacing:0.8px;color:var(--text-muted);padding:6px 14px 4px}',
+      '#hmiSidebar .hmi-nav-btn{display:flex;align-items:center;gap:8px;padding:8px 14px;margin:1px 6px;border-radius:6px;font-size:11px;font-weight:500;color:var(--text-secondary);cursor:pointer;transition:all 0.12s;border:none;background:transparent;text-align:left;width:calc(100% - 12px)}',
+      '#hmiSidebar .hmi-nav-btn:hover{background:rgba(34,211,238,0.08);color:var(--text-primary)}',
+      '#hmiSidebar .hmi-nav-btn.active{background:rgba(34,211,238,0.12);color:var(--accent-cyan);border-left:2px solid var(--accent-cyan)}',
+      '#hmiSidebar .hmi-nav-btn .badge{font-size:9px;color:var(--text-muted);margin-left:auto;background:rgba(48,54,61,0.3);padding:1px 6px;border-radius:8px}',
+      '#hmiSidebar .hmi-divider{height:1px;background:rgba(48,54,61,0.3);margin:8px 14px}',
+      '#hmiSidebar .hmi-legend{display:flex;flex-direction:column;gap:2px;padding:0 14px}',
+      '#hmiSidebar .hmi-legend-item{display:flex;align-items:center;gap:6px;font-size:9px;color:var(--text-muted);padding:3px 6px;border-radius:4px;cursor:pointer;transition:all 0.12s}',
+      '#hmiSidebar .hmi-legend-item:hover{background:rgba(34,211,238,0.08);color:var(--text-primary)}',
+      '#hmiSidebar .hmi-legend-item.active{background:rgba(34,211,238,0.15);color:var(--accent-cyan)}',
+      '#hmiSidebar .hmi-legend-item .swatch{width:16px;height:16px;display:flex;align-items:center;justify-content:center;font-size:10px;border-radius:3px;background:rgba(48,54,61,0.2)}',
+      /* ── CANVAS WRAP ── */
+      '#hmiCanvasWrap{flex:1;min-height:0;position:relative;overflow:hidden;background:var(--bg-deep,#0b1121)}',
+      '#hmiCanvasWrap canvas{cursor:grab}',
+      '#hmiCanvasWrap canvas:active{cursor:grabbing}',
+      /* ── RIGHT PANEL ── */
+      '#hmiPanel{width:360px;min-width:360px;display:none;flex-direction:column;background:rgba(15,23,42,0.85);border-left:1px solid rgba(48,54,61,0.3);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);z-index:5;overflow-y:auto;animation:slideIn 0.2s ease}',
+      '#hmiPanel.open{display:flex}',
+      '@keyframes slideIn{from{transform:translateX(20px);opacity:0}to{transform:translateX(0);opacity:1}}',
+      '#hmiPanel .hmi-phead{display:flex;align-items:center;gap:8px;padding:12px 14px 8px;border-bottom:1px solid rgba(48,54,61,0.3)}',
+      '#hmiPanel .hmi-phead .tag{font-size:13px;font-weight:700;color:var(--text-primary);font-family:JetBrains Mono,monospace}',
+      '#hmiPanel .hmi-phead .plabel{font-size:10px;color:var(--text-muted);flex:1}',
+      '#hmiPanel .hmi-phead .pclose{background:none;border:none;color:var(--text-muted);font-size:16px;cursor:pointer;padding:2px 4px}',
+      '#hmiPanel .hmi-phead .pclose:hover{color:var(--text-primary)}',
+      '#hmiPanel .hmi-pbody{padding:10px 14px;flex:1}',
+      '#hmiPanel .hmi-pbody .hmi-pval{font-size:28px;font-weight:700;color:var(--accent-cyan);font-family:JetBrains Mono,monospace;line-height:1.2}',
+      '#hmiPanel .hmi-pbody .hmi-punit{font-size:12px;color:var(--text-muted);margin-left:4px}',
+      '#hmiPanel .hmi-pbody .hmi-pstatus{display:inline-flex;align-items:center;gap:4px;font-size:9px;text-transform:uppercase;letter-spacing:0.3px;padding:2px 8px;border-radius:3px;margin-top:4px}',
+      '#hmiPanel .hmi-pbody .hmi-pstatus.normal{color:#64748b;background:rgba(100,116,139,0.15)}',
+      '#hmiPanel .hmi-pbody .hmi-pstatus.manual{color:#22c55e;background:rgba(34,197,94,0.15)}',
+      '#hmiPanel .hmi-pbody .hmi-pstatus.warning{color:#f59e0b;background:rgba(245,158,11,0.15)}',
+      '#hmiPanel .hmi-pbody .hmi-pstatus.critical{color:#ef4444;background:rgba(239,68,68,0.15)}',
+      '#hmiPanel .hmi-pbody .hmi-pcat{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--accent-cyan);margin:10px 0 4px}',
+      '#hmiPanel .hmi-pbody .hmi-prow{display:flex;justify-content:space-between;padding:3px 0;font-size:11px;border-bottom:1px solid rgba(48,54,61,0.15)}',
+      '#hmiPanel .hmi-pbody .hmi-prow .l{color:var(--text-muted)}',
+      '#hmiPanel .hmi-pbody .hmi-prow .r{color:var(--text-primary);font-family:JetBrains Mono,monospace}',
+      '#hmiPanel .hmi-pbody .hmi-pman{margin-top:10px;padding-top:8px;border-top:1px solid rgba(48,54,61,0.3)}',
+      '#hmiPanel .hmi-pbody .hmi-pman label{font-size:9px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted)}',
+      '#hmiPanel .hmi-pbody .hmi-pman .row{display:flex;align-items:center;gap:6px;margin-top:4px}',
+      '#hmiPanel .hmi-pbody .hmi-pman input{flex:1;background:rgba(15,23,42,0.6);border:1px solid rgba(48,54,61,0.5);border-radius:4px;padding:6px 8px;color:var(--text-primary);font-family:JetBrains Mono,monospace;font-size:13px}',
+      '#hmiPanel .hmi-pbody .hmi-pman input:focus{border-color:var(--accent-cyan);outline:none}',
+      '#hmiPanel .hmi-pbody .hmi-pman .unit{font-size:11px;color:var(--text-muted);min-width:24px}',
+      '#hmiPanel .hmi-pbody .hmi-pman button{padding:5px 14px;background:var(--accent-cyan);border:none;border-radius:4px;color:#0b1121;font-size:11px;font-weight:700;cursor:pointer;transition:all 0.12s}',
+      '#hmiPanel .hmi-pbody .hmi-pman button:hover{opacity:0.85}',
+      '#hmiPanel .hmi-pbody .hmi-pempty{color:var(--text-muted);font-size:11px;text-align:center;padding:30px 0}',
+      '#hmiPanel .hmi-pbody .hmi-pempty .icon{font-size:32px;margin-bottom:8px}',
+      /* ── STATUS BAR ── */
+      '#hmiStatusBar{display:flex;align-items:center;gap:16px;padding:5px 16px;background:rgba(11,17,33,0.8);border-top:1px solid rgba(48,54,61,0.3);font-size:10px;color:var(--text-muted);min-height:28px}',
+      '#hmiStatusBar .hmi-sb-item{display:flex;align-items:center;gap:4px}',
+      '#hmiStatusBar .hmi-sb-item .sb-dot{width:5px;height:5px;border-radius:50%}',
+      '#hmiStatusBar .hmi-sb-right{margin-left:auto;display:flex;align-items:center;gap:12px}',
+      /* ── RESPONSIVE ── */
+      '@media(max-width:992px){#hmiSidebar{width:44px;min-width:44px}#hmiSidebar .hmi-nav-label,#hmiSidebar .hmi-legend,#hmiSidebar .hmi-nav-btn .badge,#hmiSidebar .hmi-nav-btn span{display:none}#hmiPanel{position:absolute;right:0;top:0;bottom:0;z-index:20;box-shadow:-4px 0 20px rgba(0,0,0,0.4)}#hmiTopBar .hmi-menu-btn{display:block}}',
+      '@media(max-width:768px){#hmiSidebar{display:none}#hmiPanel{width:100%;min-width:auto}}',
+    ].join('');
+    document.head.appendChild(s);
+  }
+
+  // ══════════════════════════════════════════════════════════════════
+  //  BUILD VISUALIZER
+  // ══════════════════════════════════════════════════════════════════
+  function _buildVisualizer() {
+    _injectStyles();
+
+    var tab = document.getElementById('tab-hmi');
+    if (!tab) return;
+    tab.style.cssText = 'position:absolute;inset:0;display:flex;flex-direction:column;overflow:hidden';
+
+    var existing = document.getElementById('hmiVizWrapper');
+    if (existing) existing.remove();
+
+    // Hide old panels
+    tab.querySelectorAll('.panel.fade-in, #hmiTabBar, #hmiInfoPanel, #hmiLiveBadge, .section-label')
+      .forEach(function (el) { if (el) el.style.display = 'none'; });
+    var uploadBtn = document.getElementById('hmiLocalUploadBtn');
+    var catalogBtn = document.getElementById('hmiCatalogBtn');
+    if (uploadBtn) uploadBtn.style.display = 'none';
+    if (catalogBtn) catalogBtn.style.display = 'none';
+
+    // Create wrapper (detached)
+    var wrapper = document.createElement('div');
+    wrapper.id = 'hmiVizWrapper';
+
+    var pu = PU_INFO[_currentView];
+    var puCount = _getEquipCount(_currentView);
+
+    wrapper.innerHTML =
+      /* ── TOP BAR ── */
+      '<div id="hmiTopBar">' +
+        '<button class="hmi-menu-btn" id="hmiMenuBtn">\u2630</button>' +
+        '<div class="hmi-bread">' +
+          '<span>\uD83C\uDFE0</span>' +
+          '<span class="sep">/</span>' +
+          '<span class="cur" id="hmiBreadcrumb">' + pu.icon + ' ' + pu.label + '</span>' +
+        '</div>' +
+        '<span class="hmi-count-badge">' + puCount + ' equipos</span>' +
+        '<div class="hmi-status">' +
+          '<span class="dot"></span><span>Online</span>' +
+        '</div>' +
+        '<div class="hmi-zoom-group">' +
+          '<button class="hmi-zoom-btn" id="hmiZoomIn" title="Acercar">+</button>' +
+          '<button class="hmi-zoom-btn" id="hmiZoomOut" title="Alejar">\u2212</button>' +
+          '<button class="hmi-zoom-btn" id="hmiZoomReset" title="Restablecer">\u21BA</button>' +
+          '<span class="hmi-zoom-pct" id="hmiZoomPct">55%</span>' +
+        '</div>' +
+      '</div>' +
+      /* ── BODY ── */
+      '<div id="hmiBody">' +
+        /* ── SIDEBAR ── */
+        '<div id="hmiSidebar">' +
+          '<div class="hmi-nav-label">Procesos</div>' +
+          Object.keys(PU_INFO).map(function (k) {
+            var act = k === _currentView ? ' active' : '';
+            var ic = PU_INFO[k].icon;
+            var lb = PU_INFO[k].short + ' ' + PU_INFO[k].label;
+            var cnt = _getEquipCount(k);
+            return '<button class="hmi-nav-btn' + act + '" data-view="' + k + '"><span>' + ic + '</span><span>' + PU_INFO[k].short + '</span><span class="badge">' + cnt + '</span></button>';
+          }).join('') +
+          '<div class="hmi-divider"></div>' +
+          '<div class="hmi-nav-label">Leyenda</div>' +
+          '<div class="hmi-legend" id="hmiLegend">' +
+            Object.keys(SHAPE_ICONS).map(function (k) {
+              var label = { tank:'Tanque',pump:'Bomba',reactor:'Reactor',filter:'Filtro',column:'Columna',separator:'Separador',gauge:'Medidor',panel:'Panel',system:'Sistema',hex:'Intercambiador',valve:'V\u00E1lvula',waste:'Residuo',product:'Producto',default:'Otro' }[k] || k;
+              return '<div class="hmi-legend-item" data-shape="' + k + '"><span class="swatch">' + SHAPE_ICONS[k] + '</span>' + label + '</div>';
+            }).join('') +
+          '</div>' +
+        '</div>' +
+        /* ── CANVAS ── */
+        '<div id="hmiCanvasWrap"></div>' +
+        /* ── RIGHT PANEL ── */
+        '<div id="hmiPanel">' +
+          '<div class="hmi-pbody">' +
+            '<div class="hmi-pempty">' +
+              '<div class="icon">\uD83D\uDCCD</div>' +
+              '<div>Selecciona un equipo<br>en el diagrama</div>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+      /* ── STATUS BAR ── */
+      '<div id="hmiStatusBar">' +
+        '<span class="hmi-sb-item">\u2699 <span id="hmiSbCount">' + puCount + '</span> equipos</span>' +
+        '<span class="hmi-sb-item" id="hmiSbManual" style="display:none">\uD83D\uDD90 <span id="hmiSbManualCount">0</span> manual</span>' +
+        '<span class="hmi-sb-item" id="hmiSbAlert" style="display:none">\u26A0 <span id="hmiSbAlertCount">0</span> alertas</span>' +
+        '<span class="hmi-sb-right hmi-sb-item"><span class="sb-dot" style="background:#22c55e"></span> Sistema activo</span>' +
+      '</div>';
+
+    // Insert into tab
+    var mainPanel = tab.querySelector('.panel.fade-in');
+    if (mainPanel) mainPanel.parentNode.insertBefore(wrapper, mainPanel.nextSibling);
+    else tab.appendChild(wrapper);
+
+    // Move #hmiContainer into canvas wrap
+    var origContainer = document.getElementById('hmiContainer');
+    var canvasWrap = document.getElementById('hmiCanvasWrap');
+    if (origContainer && canvasWrap) {
+      origContainer.style.cssText = 'width:100%;height:100%;padding:0;background:transparent;position:relative';
+      origContainer.innerHTML = '';
+      canvasWrap.appendChild(origContainer);
+    } else if (!origContainer && canvasWrap) {
+      var newCont = document.createElement('div');
+      newCont.id = 'hmiContainer';
+      newCont.style.cssText = 'width:100%;height:100%;padding:0;background:transparent;position:relative';
+      canvasWrap.appendChild(newCont);
+    }
+
+    // Wire sidebar nav
+    document.querySelectorAll('.hmi-nav-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var view = btn.getAttribute('data-view');
+        if (view && view !== _currentView) _switchView(view);
+      });
     });
 
-    window.scadaBus.on('tag:focus', ({ varId }) => {
-      const container = getContainer();
-      if (!container) return;
-      const el = container.querySelector(`[data-scada-var="${varId}"]`);
-      if (!el) return;
-      const prev = el.style.filter;
-      el.style.transition = 'filter .3s';
-      el.style.filter = 'drop-shadow(0 0 6px #22c55e) drop-shadow(0 0 12px #22c55e)';
-      setTimeout(() => { el.style.filter = prev || ''; }, 1800);
+    // Wire zoom buttons
+    document.getElementById('hmiZoomIn').onclick = function () {
+      if (_canvas) { _canvas.scale = Math.min(3.0, _canvas.scale * 1.25); _updateZoomPct(); }
+    };
+    document.getElementById('hmiZoomOut').onclick = function () {
+      if (_canvas) { _canvas.scale = Math.max(0.15, _canvas.scale / 1.25); _updateZoomPct(); }
+    };
+    document.getElementById('hmiZoomReset').onclick = function () {
+      if (_canvas) { _canvas.switchView(_currentView); _updateZoomPct(); }
+    };
+
+    // Mobile menu toggle
+    var menuBtn = document.getElementById('hmiMenuBtn');
+    var sidebar = document.getElementById('hmiSidebar');
+    if (menuBtn && sidebar) {
+      menuBtn.onclick = function () {
+        var vis = sidebar.style.display;
+        sidebar.style.display = vis === 'block' ? '' : 'block';
+      };
+    }
+
+    // Wire legend filter
+    document.querySelectorAll('.hmi-legend-item').forEach(function (item) {
+      item.addEventListener('click', function () {
+        var shape = item.getAttribute('data-shape');
+        if (!shape || !_canvas) return;
+        if (_canvas._shapeFilter === shape) {
+          _canvas.clearShapeFilter();
+          item.classList.remove('active');
+        } else {
+          document.querySelectorAll('.hmi-legend-item').forEach(function (x) { x.classList.remove('active'); });
+          _canvas.setShapeFilter(shape);
+          item.classList.add('active');
+        }
+      });
+    });
+
+    // Ensure no scroll — force canvas resize
+    setTimeout(function () {
+      if (_canvas && _canvas._resize) _canvas._resize();
+    }, 50);
+  }
+
+  // ══════════════════════════════════════════════════════════════════
+  //  UPDATE FUNCTIONS
+  // ══════════════════════════════════════════════════════════════════
+
+  function _updateZoomPct() {
+    var el = document.getElementById('hmiZoomPct');
+    if (el && _canvas) el.textContent = Math.round(_canvas.scale * 100) + '%';
+  }
+
+  function _updateTopBar(view) {
+    var bc = document.getElementById('hmiBreadcrumb');
+    if (bc) {
+      var pu = PU_INFO[view];
+      bc.innerHTML = (pu ? pu.icon + ' ' + pu.label : view);
+    }
+    var cnt = document.getElementById('hmiSbCount');
+    if (cnt) cnt.textContent = _getEquipCount(view);
+    var badge = document.querySelector('.hmi-count-badge');
+    if (badge) badge.textContent = _getEquipCount(view) + ' equipos';
+  }
+
+  function _updateSidebar(view) {
+    document.querySelectorAll('.hmi-nav-btn').forEach(function (btn) {
+      btn.classList.toggle('active', btn.getAttribute('data-view') === view);
     });
   }
 
-  // ─── BOTONES Y TOOLBAR ──────────────────────────────────────────
-  window._setupHMITools = function() {
-    const toolbar = document.getElementById('hmiToolbar');
-    if (!toolbar) return;
+  function _updateStatusBar() {
+    var db = window.TAG_PROPERTIES_DB || {};
+    var tags = _getEquipTags(_currentView);
+    var manualCount = 0, alertCount = 0;
+    tags.forEach(function (t) {
+      var s = _getStatus(t);
+      if (s === 'manual') manualCount++;
+      if (s === 'warning' || s === 'critical') alertCount++;
+    });
+    var manualEl = document.getElementById('hmiSbManual');
+    var manualCnt = document.getElementById('hmiSbManualCount');
+    if (manualEl && manualCnt) {
+      manualCnt.textContent = manualCount;
+      manualEl.style.display = manualCount > 0 ? 'inline-flex' : 'none';
+    }
+    var alertEl = document.getElementById('hmiSbAlert');
+    var alertCnt = document.getElementById('hmiSbAlertCount');
+    if (alertEl && alertCnt) {
+      alertCnt.textContent = alertCount;
+      alertEl.style.display = alertCount > 0 ? 'inline-flex' : 'none';
+    }
+  }
 
-    const needView = () => {
-      if (!window._hmiView) { window.showNotif?.('Carga primero un archivo HMI', 'warning'); return false; }
-      return true;
-    };
+  function _clearLegendFilter() {
+    if (_canvas && _canvas.clearShapeFilter) _canvas.clearShapeFilter();
+    document.querySelectorAll('.hmi-legend-item').forEach(function (x) { x.classList.remove('active'); });
+  }
 
-    // Wire existing HTML buttons — only once
-    if (document.getElementById('hmiToolsGroup')?.getAttribute('data-wired')) return;
+  // ══════════════════════════════════════════════════════════════════
+  //  SWITCH VIEW
+  // ══════════════════════════════════════════════════════════════════
+  function _switchView(view) {
+    _currentView = view;
+    _selectedTag = null;
+    _clearLegendFilter();
+    _updateTopBar(view);
+    _updateSidebar(view);
+    _updateStatusBar();
+    if (_canvas && _canvas.switchView) _canvas.switchView(view);
+    _updateZoomPct();
+    _closePanel();
+  }
 
-    const wire = (id, handler) => {
-      const el = document.getElementById(id);
-      if (el) el.onclick = handler;
-    };
+  // ══════════════════════════════════════════════════════════════════
+  //  RIGHT PANEL
+  // ══════════════════════════════════════════════════════════════════
+  function _closePanel() {
+    var panel = document.getElementById('hmiPanel');
+    if (panel) {
+      panel.classList.remove('open');
+      panel.innerHTML =
+        '<div class="hmi-pbody">' +
+          '<div class="hmi-pempty">' +
+            '<div class="icon">\uD83D\uDCCD</div>' +
+            '<div>Selecciona un equipo<br>en el diagrama</div>' +
+          '</div>' +
+        '</div>';
+    }
+  }
 
-    wire('hmiZoomIn',    () => needView() && window._hmiView.zoom(1.2));
-    wire('hmiZoomOut',   () => needView() && window._hmiView.zoom(1/1.2));
-    wire('hmiResetView', () => needView() && window._hmiView.reset());
-    wire('hmiRotateCCW', () => needView() && window._hmiView.rotate(-90));
-    wire('hmiRotateCW',  () => needView() && window._hmiView.rotate(90));
-    wire('hmiOrientH',   () => needView() && window._hmiView.setRotation(0));
-    wire('hmiOrientV',   () => needView() && window._hmiView.setRotation(90));
-    wire('hmiFullscreen', () => {
-      if (typeof window._enterFullscreenViewer === 'function') {
-        window._enterFullscreenViewer('hmiContainer');
-      }
+  function _openPanel(varId) {
+    var panel = document.getElementById('hmiPanel');
+    if (!panel) return;
+
+    var props = window.TAG_PROPERTIES_DB && window.TAG_PROPERTIES_DB[varId];
+    if (!props) { _closePanel(); return; }
+
+    var dv = _getDisplayValue(varId);
+    var status = _getStatus(varId);
+    var sc = { manual:'#22c55e',warning:'#f59e0b',critical:'#ef4444',normal:'#64748b' }[status] || '#64748b';
+    var sl = { manual:'Manual',warning:'Alerta',critical:'Cr\u00EDtico',normal:'Normal' }[status] || 'Normal';
+    var shape = _getShape(varId);
+    var icon = SHAPE_ICONS[shape] || '\u2753';
+
+    var html = '';
+
+    // Header
+    html += '<div class="hmi-phead">';
+    html += '  <span style="font-size:18px">' + icon + '</span>';
+    html += '  <span class="tag">' + varId + '</span>';
+    html += '  <span class="plabel">' + props.label + '</span>';
+    html += '  <button class="pclose" id="hmiPClose">\u2715</button>';
+    html += '</div>';
+
+    // Body
+    html += '<div class="hmi-pbody">';
+
+    // Value + status
+    html += '  <div class="hmi-pval">' + dv.value + '<span class="hmi-punit">' + dv.unit + '</span></div>';
+    html += '  <div class="hmi-pstatus ' + status + '">';
+    if (dv.source === 'manual') html += '\uD83D\uDD90 ';
+    html += sl + '</div>';
+
+    // Editable sub-variables by category
+    var catIdx = 0;
+    ['physical', 'chemical', 'process'].forEach(function (cat) {
+      var arr = props[cat];
+      if (!arr || arr.length === 0) return;
+      var cl = { physical:'\u2699 F\u00EDsicas', chemical:'\uD83E\uDDEA Qu\u00EDmicas', process:'\uD83D\uDD04 Proceso' };
+      html += '  <div class="hmi-pcat">' + (cl[cat] || cat) + '</div>';
+      arr.forEach(function (p) {
+        var overrideVal = _getSubVar(varId, cat, p.key);
+        var val = overrideVal !== null ? overrideVal : (p.value || '');
+        html += '  <div class="hmi-prow" style="display:flex;align-items:center;gap:8px"><span class="l" style="flex-shrink:0;min-width:80px;font-size:14px;color:var(--text-muted)">' + p.label + '</span>';
+        html += '<input type="text" id="hmi_inp_' + catIdx + '" value="' + val + '" data-tag="' + varId + '" data-cat="' + cat + '" data-key="' + p.key + '" data-unit="' + (p.unit || '') + '" style="flex:1;min-width:0;background:rgba(15,23,42,0.6);border:1px solid rgba(48,54,61,0.5);border-radius:5px;padding:8px 12px;color:var(--text-primary);font-family:JetBrains Mono,monospace;font-size:15px;text-align:right;width:auto;height:36px">';
+        html += '<span style="font-size:13px;color:var(--text-muted);min-width:32px;text-align:left">' + (p.unit || '') + '</span>';
+        html += '</div>';
+        catIdx++;
+      });
     });
 
-    const group = document.getElementById('hmiToolsGroup');
-    if (group) group.setAttribute('data-wired', '1');
-  };
+    // Save all button
+    html += '  <div class="hmi-pman">';
+    html += '    <label>Todas las variables</label>';
+    html += '    <div class="row" style="margin-top:4px">';
+    html += '      <button id="hmiPSaveAll" style="flex:1;padding:6px;background:var(--accent-cyan);border:none;border-radius:4px;color:#0b1121;font-size:11px;font-weight:700;cursor:pointer">\uD83D\uDCBE Guardar todo</button>';
+    html += '    </div>';
+    html += '  </div>';
+    html += '</div>';
 
-  // ─── MODAL DE SELECCIÓN ──────────────────────────────────────────
-  window.openHMIModal = async function() {
-    const svgs = await window.listHMISVGs();
+    panel.innerHTML = html;
+    panel.classList.add('open');
 
-    let modalEl = document.getElementById('hmiModal');
-    if (!modalEl) {
-      modalEl = document.createElement('div');
-      modalEl.id = 'hmiModal';
-      modalEl.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1050;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px)';
-      document.body.appendChild(modalEl);
+    document.getElementById('hmiPClose').onclick = _closePanel;
+
+    document.getElementById('hmiPSaveAll').onclick = function () {
+      var count = 0;
+      var firstVal = null, firstUnit = null;
+      for (var i = 0; document.getElementById('hmi_inp_' + i); i++) {
+        var inp = document.getElementById('hmi_inp_' + i);
+        var v = inp.value.trim();
+        var tagId2 = inp.getAttribute('data-tag');
+        var cat2 = inp.getAttribute('data-cat');
+        var key2 = inp.getAttribute('data-key');
+        var unit2 = inp.getAttribute('data-unit') || '';
+        if (v !== '' && tagId2 && cat2 && key2) {
+          _setSubVar(tagId2, cat2, key2, v);
+          if (firstVal === null) { firstVal = v; firstUnit = unit2; }
+          count++;
+        }
+      }
+      if (count > 0 && firstVal !== null && firstUnit !== null) {
+        if (window.HMIStore) window.HMIStore.set(varId, firstVal, firstUnit);
+      }
+      if (window.showNotif) window.showNotif(count + ' variable(s) guardada(s) para ' + varId, 'success');
+      _updateStatusBar();
+      // Re-open to reflect changes
+      _openPanel(varId);
+    };
+  }
+
+  // ══════════════════════════════════════════════════════════════════
+  //  MODAL (alternative to panel for full detail)
+  // ══════════════════════════════════════════════════════════════════
+  function _openModal(varId) {
+    var props = window.TAG_PROPERTIES_DB && window.TAG_PROPERTIES_DB[varId];
+    if (!props) return;
+
+    if (!document.getElementById('hmiModalStyle')) {
+      var st = document.createElement('style');
+      st.id = 'hmiModalStyle';
+      st.textContent =
+        '#hmiModalOverlay{position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);padding:20px;animation:fadeIn 0.15s ease}' +
+        '@keyframes fadeIn{from{opacity:0}to{opacity:1}}' +
+        '#hmiModalOverlay .hmiModal{background:var(--bg-panel,#161b22);border:1px solid rgba(48,54,61,0.5);border-radius:12px;width:100%;max-width:440px;box-shadow:0 20px 60px rgba(0,0,0,0.5);overflow:hidden;animation:modalIn 0.2s ease}' +
+        '@keyframes modalIn{from{transform:scale(0.95);opacity:0}to{transform:scale(1);opacity:1}}' +
+        '#hmiModalOverlay .hmiMhead{padding:16px 20px 4px}' +
+        '#hmiModalOverlay .hmiMhead h3{margin:0;font-size:15px;color:var(--text-primary);font-family:JetBrains Mono,monospace}' +
+        '#hmiModalOverlay .hmiMhead .mlabel{font-size:11px;color:var(--text-muted)}' +
+        '#hmiModalOverlay .hmiMtabs{display:flex;gap:2px;padding:8px 20px 0;border-bottom:1px solid rgba(48,54,61,0.2)}' +
+        '#hmiModalOverlay .hmiMtab{padding:7px 14px;font-size:11px;color:var(--text-muted);cursor:pointer;border-bottom:2px solid transparent;transition:all 0.12s;margin-bottom:-1px}' +
+        '#hmiModalOverlay .hmiMtab.active{color:var(--accent-cyan);border-bottom-color:var(--accent-cyan)}' +
+        '#hmiModalOverlay .hmiMpane{display:none;padding:10px 20px;max-height:300px;overflow-y:auto}' +
+        '#hmiModalOverlay .hmiMpane.active{display:block}' +
+        '#hmiModalOverlay .hmiMrow{display:flex;align-items:center;gap:10px;padding:7px 0;font-size:14px;border-bottom:1px solid rgba(48,54,61,0.08)}' +
+        '#hmiModalOverlay .hmiMrow .ml{color:var(--text-muted);width:140px;flex-shrink:0;font-size:14px}' +
+        '#hmiModalOverlay .hmiMrow input{flex:1;background:rgba(15,23,42,0.6);border:1px solid rgba(48,54,61,0.5);border-radius:5px;padding:8px 12px;color:var(--text-primary);font-family:JetBrains Mono,monospace;font-size:16px;text-align:right;height:38px}' +
+        '#hmiModalOverlay .hmiMrow input:focus{border-color:var(--accent-cyan);outline:none}' +
+        '#hmiModalOverlay .hmiMrow .mu{font-size:14px;color:var(--text-muted);min-width:32px}' +
+        '#hmiModalOverlay .hmiMfoot{padding:10px 20px 16px;border-top:1px solid rgba(48,54,61,0.3);display:flex;gap:8px}' +
+        '#hmiModalOverlay .hmiMfoot button{flex:1;padding:7px;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer;transition:all 0.12s}' +
+        '#hmiModalOverlay .hmiMfoot .cancel{background:transparent;border:1px solid rgba(48,54,61,0.5);color:var(--text-primary)}' +
+        '#hmiModalOverlay .hmiMfoot .cancel:hover{background:rgba(48,54,61,0.2)}' +
+        '#hmiModalOverlay .hmiMfoot .save{background:var(--accent-cyan);border:none;color:#0b1121}' +
+        '#hmiModalOverlay .hmiMfoot .save:hover{opacity:0.85}';
+      document.head.appendChild(st);
     }
 
-    if (svgs.length === 0) {
-      modalEl.innerHTML = `
-      <div style="background:var(--bg-elevated);border:1px solid var(--border-default);border-radius:16px;padding:28px;width:440px;max-width:95vw">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
-          <h5 style="margin:0;font-size:16px;color:var(--text-heading)">Cargar HMI (.svg)</h5>
-          <button onclick="document.getElementById('hmiModal').remove()" style="background:none;border:none;color:var(--text-secondary);cursor:pointer;font-size:18px">×</button>
-        </div>
-        <p style="color:var(--text-secondary);font-size:13px;margin-bottom:16px">No hay archivos .svg en la carpeta <code>hmi/</code> del servidor.</p>
-        <p style="color:var(--text-disabled);font-size:12px">Sube archivos SVG de paneles HMI a través del File Manager en la carpeta <code>hmi/</code>.</p>
-        <div style="margin-top:20px;text-align:right"><button class="btn btn-outline-secondary btn-sm" onclick="document.getElementById('hmiModal').remove()">Cerrar</button></div>
-      </div>`;
-      modalEl.style.display = 'flex';
+    var overlay = document.createElement('div');
+    overlay.id = 'hmiModalOverlay';
+
+    var tabsHtml = '', panesHtml = '', first = true;
+    var catMap = { physical: '\u2699 F\u00EDsicas', chemical: '\uD83E\uDDEA Qu\u00EDmicas', process: '\uD83D\uDD04 Proceso' };
+    var flatIdx = 0;
+    ['physical', 'chemical', 'process'].forEach(function (cat) {
+      var arr = props[cat];
+      if (!arr || arr.length === 0) return;
+      var act = first ? ' active' : '';
+      tabsHtml += '<div class="hmiMtab' + act + '" data-cat="' + cat + '">' + (catMap[cat] || cat) + '</div>';
+      var rows = '';
+      arr.forEach(function (p) {
+        var overrideVal = _getSubVar(varId, cat, p.key);
+        var val = overrideVal !== null ? overrideVal : (p.value || '');
+        rows += '<div class="hmiMrow">' +
+          '<span class="ml">' + p.label + '</span>' +
+          '<input type="text" id="hm_' + flatIdx + '" value="' + val + '" data-tag="' + varId + '" data-cat="' + cat + '" data-key="' + p.key + '">' +
+          '<span class="mu">' + (p.unit || '') + '</span>' +
+          '</div>';
+        flatIdx++;
+      });
+      panesHtml += '<div class="hmiMpane' + act + '" data-cat="' + cat + '">' + rows + '</div>';
+      first = false;
+    });
+
+    overlay.innerHTML =
+      '<div class="hmiModal">' +
+        '<div class="hmiMhead"><h3>' + varId + '</h3><span class="mlabel">' + props.label + '</span></div>' +
+        '<div class="hmiMtabs">' + tabsHtml + '</div>' +
+        '<div>' + panesHtml + '</div>' +
+        '<div class="hmiMfoot">' +
+          '<button class="cancel" id="hmiMCancel">Cancelar</button>' +
+          '<button class="save" id="hmiMSave">\uD83D\uDCBE Guardar</button>' +
+        '</div>' +
+      '</div>';
+
+    document.body.appendChild(overlay);
+
+    overlay.querySelectorAll('.hmiMtab').forEach(function (t) {
+      t.addEventListener('click', function () {
+        overlay.querySelectorAll('.hmiMtab').forEach(function (x) { x.classList.remove('active'); });
+        overlay.querySelectorAll('.hmiMpane').forEach(function (x) { x.classList.remove('active'); });
+        t.classList.add('active');
+        var p = overlay.querySelector('.hmiMpane[data-cat="' + t.getAttribute('data-cat') + '"]');
+        if (p) p.classList.add('active');
+      });
+    });
+
+    var firstInp = overlay.querySelector('input');
+    if (firstInp) firstInp.focus();
+
+    overlay.querySelector('#hmiMCancel').onclick = function () { overlay.remove(); };
+    overlay.querySelector('#hmiMSave').onclick = function () {
+      var count = 0, firstVal = null, firstUnit = null;
+      overlay.querySelectorAll('.hmiMrow input').forEach(function (inp) {
+        var v = inp.value.trim();
+        var tagId2 = inp.getAttribute('data-tag');
+        var cat2 = inp.getAttribute('data-cat');
+        var key2 = inp.getAttribute('data-key');
+        if (v !== '' && tagId2 && cat2 && key2) {
+          _setSubVar(tagId2, cat2, key2, v);
+          if (firstVal === null) firstVal = v;
+          count++;
+        }
+      });
+      if (count > 0 && firstVal !== null) {
+        var db = window.TAG_PROPERTIES_DB && window.TAG_PROPERTIES_DB[varId];
+        var unit = (db && db.physical && db.physical[0] && db.physical[0].unit) || '';
+        if (window.HMIStore) window.HMIStore.set(varId, firstVal, unit);
+      }
+      if (window.showNotif) window.showNotif(count + ' variable(s) guardada(s) para ' + varId, 'success');
+      _updateStatusBar();
+      overlay.remove();
+    };
+    overlay.onclick = function (e) { if (e.target === overlay) overlay.remove(); };
+  }
+
+  // ══════════════════════════════════════════════════════════════════
+  //  MAIN LOAD
+  // ══════════════════════════════════════════════════════════════════
+  window.loadHMISVG = async function (filename) {
+    var container = getContainer();
+    if (!container) return;
+
+    _buildVisualizer();
+
+    var canvasContainer = document.getElementById('hmiContainer');
+    if (!canvasContainer) return;
+    canvasContainer.innerHTML = '';
+
+    if (!window.HMI_CANVAS) {
+      canvasContainer.innerHTML = '<div style="color:var(--danger);padding:20px">Error: HMI_CANVAS no cargado.</div>';
       return;
     }
 
-    modalEl.innerHTML = `
-    <div style="background:var(--bg-elevated);border:1px solid var(--border-default);border-radius:16px;padding:28px;width:480px;max-width:95vw">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
-        <h5 style="margin:0;font-size:16px;color:var(--text-heading)">Seleccionar HMI</h5>
-        <button onclick="document.getElementById('hmiModal').remove()" style="background:none;border:none;color:var(--text-secondary);cursor:pointer;font-size:18px">×</button>
-      </div>
-      <div style="display:flex;flex-direction:column;gap:8px;max-height:320px;overflow-y:auto">
-        ${svgs.map(f => `
-        <div onclick="window.loadHMISVG('${f.name}');document.getElementById('hmiModal').remove()"
-          style="padding:12px 16px;border:1px solid var(--border-subtle);border-radius:8px;cursor:pointer;display:flex;align-items:center;gap:12px;transition:all 0.15s"
-          onmouseenter="this.style.borderColor='var(--primary)';this.style.background='rgba(16,185,129,0.05)'"
-          onmouseleave="this.style.borderColor='var(--border-subtle)';this.style.background=''">
-          <span style="font-size:20px">🖥️</span>
-          <div>
-            <div style="font-size:13px;font-weight:500;color:var(--text-primary)">${f.name}</div>
-            <div style="font-size:11px;color:var(--text-disabled)">${f.size ? (f.size/1024).toFixed(1) + ' KB SVG' : 'Panel HMI'}</div>
-          </div>
-          ${f.name === _currentFile ? '<span style="margin-left:auto;font-size:11px;color:var(--accent-green)">✓ actual</span>' : ''}
-        </div>`).join('')}
-      </div>
-      <div style="margin-top:16px;text-align:right"><button class="btn btn-outline-secondary btn-sm" onclick="document.getElementById('hmiModal').remove()">Cancelar</button></div>
-    </div>`;
-    modalEl.style.display = 'flex';
-  };
-
-  // ─── CARGA LOCAL ──────────────────────────────────────────────────
-  window.loadHMILocalFile = function(file) {
-    if (!file) return;
-    const container = getContainer();
-    if (!container) return;
-    const name = file.name || 'archivo';
-
-    if (name.toLowerCase().endsWith('.svg')) {
-      const reader = new FileReader();
-      reader.onload = e => {
-        container.innerHTML = e.target.result;
-        const svgEl = container.querySelector('svg');
-        if (svgEl) {
-          svgEl.style.width = '100%';
-          svgEl.style.height = '100%';
-          svgEl.style.maxHeight = 'calc(100vh - 200px)';
-          svgEl.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-          if (typeof window._normalizeSVGColors === 'function') window._normalizeSVGColors(svgEl);
-          _addHMIPanZoom(svgEl);
-          if (typeof window._wireSVGHotspots === 'function') window._wireSVGHotspots(svgEl);
-          _wireLiveValues(svgEl);
-        } else {
-          container.innerHTML = `<div style="padding:24px;color:var(--danger,#dc3545)">El archivo no contiene un &lt;svg&gt; válido.</div>`;
-        }
-        _currentFile = name;
-        const label = getLabelEl();
-        if (label) label.textContent = name;
-        _updateTagCount();
-        _updateHMITagInfo();
-        _renderHMIFileList();
-        if (typeof window._checkIntegration === 'function') setTimeout(window._checkIntegration, 200);
-        if (typeof window.showNotif === 'function') window.showNotif(`HMI "${name}" cargado`, 'success');
-      };
-      reader.readAsText(file);
-    } else {
-      if (typeof window.showNotif === 'function') window.showNotif(`Formato no soportado. Usa .svg`, 'danger');
-    }
-  };
-
-  // ─── INIT ─────────────────────────────────────────────────────────
-  document.addEventListener('DOMContentLoaded', () => {
-    const tab = document.getElementById('tab-hmi');
-    if (!tab) return;
-
-    // File input (hidden, shared between upload button and drag-drop)
-    const fileInput = document.getElementById('hmiLocalFileInput') || document.createElement('input');
-    fileInput.type = 'file';
-    fileInput.accept = '.svg,image/svg+xml';
-    fileInput.style.display = 'none';
-    fileInput.id = 'hmiLocalFileInput';
-    fileInput.addEventListener('change', e => {
-      const f = e.target.files?.[0];
-      if (f) window.loadHMILocalFile(f);
-      e.target.value = '';
-    });
-    if (!fileInput.parentElement) document.body.appendChild(fileInput);
-
-    // Wire existing HTML buttons
-    const uploadBtn = document.getElementById('hmiLocalUploadBtn');
-    if (uploadBtn) uploadBtn.onclick = () => fileInput.click();
-
-    const catalogBtn = document.getElementById('hmiCatalogBtn');
-    if (catalogBtn) catalogBtn.onclick = () => window.openHMIModal();
-
-    // Drag-drop
-    const container = getContainer();
-    if (container) {
-      container.addEventListener('dragover', e => {
-        e.preventDefault();
-        container.style.outline = '2px dashed var(--primary,#10b981)';
-      });
-      container.addEventListener('dragleave', () => { container.style.outline = ''; });
-      container.addEventListener('drop', e => {
-        e.preventDefault();
-        container.style.outline = '';
-        const f = e.dataTransfer?.files?.[0];
-        if (f) window.loadHMILocalFile(f);
-      });
-    }
-
-    window._setupHMITools();
-  });
-
-  // ─── TAG INFO ─────────────────────────────────────────────────────
-  function _updateHMITagInfo() {
-    const tags = (window._getHMITags && window._getHMITags()) || [];
-    const tagListEl = document.getElementById('hmiTagListPanel');
-    const tagCountEl = document.getElementById('hmiTagCount');
-    if (tagCountEl) tagCountEl.textContent = String(tags.length);
-
-    if (tagListEl) {
-      if (tags.length === 0) {
-        tagListEl.innerHTML = '<span style="color:var(--text-muted);font-size:12px">Carga un HMI para ver sus tags.</span>';
-      } else {
-        tagListEl.innerHTML = tags.map(t =>
-          `<span style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:6px;font-size:11px;font-family:'JetBrains Mono',monospace;color:#22c55e;cursor:pointer"
-             onclick="window.scadaSelectTag('${t}','hmi')">🏷️ ${t}</span>`
-        ).join('');
-      }
-    }
-
-    // Shared tags
-    const sharedEl = document.getElementById('hmiSharedCount');
-    if (sharedEl && typeof window._checkIntegration === 'function') {
-      const result = window._checkIntegration();
-      sharedEl.textContent = String(result.commonPidHmi.length);
-    }
-  }
-
-  // ─── FILE LIST ────────────────────────────────────────────────────
-  async function _renderHMIFileList() {
-    const listEl = document.getElementById('hmiFileList');
-    const emptyEl = document.getElementById('hmiFileListEmpty');
-    const countEl = document.getElementById('hmiFileCount');
-    const countEl2 = document.getElementById('hmiFileCount2');
-    if (!listEl) return;
-
     try {
-      const res = await fetch('/api/files/list?path=/hmi');
-      if (!res.ok) throw new Error('fetch fail');
-      const files = await res.json();
-      const svgs = files.filter(f => f.name && f.name.toLowerCase().endsWith('.svg'));
+      _canvas = new window.HMI_CANVAS('hmiContainer');
 
-      if (countEl) countEl.textContent = String(svgs.length);
-      if (countEl2) countEl2.textContent = String(svgs.length);
+      var tags = Object.keys(window.TAG_PROPERTIES_DB || {});
+      _canvas.init(tags);
+      _canvas.switchView(_currentView);
+      _updateZoomPct();
 
-      if (svgs.length === 0) {
-        if (emptyEl) emptyEl.style.display = '';
-        listEl.querySelectorAll('[data-hmi-file]').forEach(el => el.remove());
-        return;
-      }
-
-      if (emptyEl) emptyEl.style.display = 'none';
-      listEl.querySelectorAll('[data-hmi-file]').forEach(el => el.remove());
-
-      svgs.forEach(f => {
-        const chip = document.createElement('span');
-        chip.setAttribute('data-hmi-file', '1');
-        const active = f.name === _currentFile;
-        chip.style.cssText = `display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:8px;font-size:12px;cursor:pointer;white-space:nowrap;flex-shrink:0;transition:all 0.15s;font-family:'JetBrains Mono',monospace;${active ? 'background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.4);color:#22c55e;font-weight:600' : 'background:var(--bg-deep);border:1px solid var(--border-subtle);color:var(--text-secondary)'}`;
-        chip.textContent = active ? '✓ ' + f.name : f.name;
-        chip.title = f.name + (f.size ? ' (' + (f.size/1024).toFixed(1) + ' KB)' : '');
-        chip.onmouseenter = () => { if (!active) { chip.style.borderColor = 'var(--primary)'; chip.style.color = 'var(--primary)'; } };
-        chip.onmouseleave = () => { if (!active) { chip.style.borderColor = 'var(--border-subtle)'; chip.style.color = 'var(--text-secondary)'; } };
-        chip.onclick = () => { if (!active) window.loadHMISVG(f.name); };
-        listEl.appendChild(chip);
+      _canvas.onNodeClick(function (varId) {
+        _selectedTag = varId;
+        _openPanel(varId);
       });
     } catch (e) {
-      if (countEl) countEl.textContent = '0';
+      canvasContainer.innerHTML = '<div style="color:var(--danger);padding:20px">Error: ' + e.message + '</div>';
+      return;
     }
+
+    var label = document.getElementById('hmiLabel');
+    if (label) label.textContent = 'Process Diagram';
+    _updateStatusBar();
+    if (typeof window._checkIntegration === 'function') setTimeout(window._checkIntegration, 200);
+    // Expose refresh for status bar updates
+    window._hmiRefreshStatus = _updateStatusBar;
+  };
+
+  window.listHMISVGs = window.listHMISVGs;
+  window.loadHMISVG = window.loadHMISVG;
+  window.onHmiTagSelect = _openModal;
+
+  // ══════════════════════════════════════════════════════════════════
+  //  STARTUP: clear alarms/schedules + generate random alarms
+  // ══════════════════════════════════════════════════════════════════
+  function _startup() {
+    // Clear existing alarm history and acks
+    try {
+      localStorage.removeItem('scada_alarm_history');
+      localStorage.removeItem('scada_alarm_acks');
+    } catch (e) {}
+    // Clear calendar events
+    try {
+      localStorage.removeItem('scada_calendar_events');
+    } catch (e) {}
+    // Reset in-memory alarm data
+    if (window.alarmData) window.alarmData = [];
+    if (window.AlarmManager && window.AlarmManager._reset) window.AlarmManager._reset();
+
+    // Generate 2-3 random alarms
+    setTimeout(function () {
+      var db = window.TAG_PROPERTIES_DB;
+      if (!db) return;
+
+      var candidates = [];
+      Object.keys(db).forEach(function (id) {
+        var p = db[id];
+        if (p && p.alarms && (p.alarms.crit_max != null)) candidates.push(id);
+      });
+
+      if (candidates.length === 0) {
+        Object.keys(db).forEach(function (id) {
+          var p = db[id];
+          if (p && p.alarms && (p.alarms.max != null)) candidates.push(id);
+        });
+      }
+
+      if (candidates.length === 0) return;
+
+      var count = Math.min(2 + Math.floor(Math.random() * 2), candidates.length); // 2 or 3
+
+      // Shuffle
+      for (var si = candidates.length - 1; si > 0; si--) {
+        var sj = Math.floor(Math.random() * (si + 1));
+        var tmp = candidates[si]; candidates[si] = candidates[sj]; candidates[sj] = tmp;
+      }
+
+      var triggered = [];
+      for (var ri = 0; ri < count; ri++) {
+        var tagId = candidates[ri];
+        var p = db[tagId];
+        if (!p || !p.alarms) continue;
+
+        var targetVal = null;
+        var threshold = null;
+        var unit = (p.physical && p.physical[0] && p.physical[0].unit) || p.unit || '';
+
+        // Prefer exceeding the critical max
+        if (p.alarms.crit_max != null) {
+          targetVal = p.alarms.crit_max + (Math.random() * 10 + 1);
+          threshold = 'crit_max=' + p.alarms.crit_max;
+        } else if (p.alarms.max != null) {
+          targetVal = p.alarms.max + (Math.random() * 5 + 1);
+          threshold = 'max=' + p.alarms.max;
+        } else if (p.alarms.crit_min != null) {
+          targetVal = p.alarms.crit_min - (Math.random() * 10 + 1);
+          threshold = 'crit_min=' + p.alarms.crit_min;
+        } else if (p.alarms.min != null) {
+          targetVal = p.alarms.min - (Math.random() * 5 + 1);
+          threshold = 'min=' + p.alarms.min;
+        }
+
+        if (targetVal !== null) {
+          targetVal = Math.round(targetVal * 100) / 100;
+          // Set via HMIStore so the alarm evaluator picks it up
+          if (window.HMIStore) {
+            window.HMIStore.set(tagId, String(targetVal), unit);
+            // Also update TAG_PROPERTIES_DB physical[0] value
+            if (p.physical && p.physical[0]) {
+              p.physical[0].value = String(targetVal);
+            }
+          }
+          triggered.push(tagId + '=' + targetVal + ' (' + threshold + ')');
+        }
+      }
+
+      if (triggered.length > 0) {
+        console.log('[HMI] Alarms aleatorias generadas:', triggered.join(', '));
+        window._hmiRandomAlarms = triggered;
+        // Force alarm evaluation
+        if (window.AlarmManager && typeof window.AlarmManager.evaluateNow === 'function') {
+          window.AlarmManager.evaluateNow();
+        }
+      }
+    }, 1000);
   }
-  window._renderHMIFileList = _renderHMIFileList;
+
+  // Run startup after DOM ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _startup);
+  } else {
+    _startup();
+  }
+
 })();

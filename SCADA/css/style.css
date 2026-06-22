@@ -1202,6 +1202,11 @@
   padding: 24px;
   margin-top: var(--topbar-h);
   background: var(--bg-base);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
 }
 
 /* ═══ RESET & BASE ═══ */

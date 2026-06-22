@@ -64,10 +64,14 @@ window.showTab = function(tabId) {
       if (typeof init3D === 'function' && !window.threeRenderer) init3D();
     }, 100);
   }
+  if (tabId === 'hmi' && typeof window.loadHMISVG === 'function') {
+    window.loadHMISVG('Process Diagram');
+  }
   if (tabId === 'alarms' && typeof populateAlarmTable === 'function') populateAlarmTable();
   if (tabId === 'config' && typeof populateTags === 'function') populateTags();
   if (tabId === 'ai' && typeof BalanceManager !== 'undefined') BalanceManager.updateBalances();
   if (tabId === 'hmi' && typeof window._setupHMITools === 'function') window._setupHMITools();
+
 };
 
 // ─── SIDEBAR TOGGLE ──────────────────────────────────────────────

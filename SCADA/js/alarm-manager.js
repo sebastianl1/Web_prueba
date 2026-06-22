@@ -83,14 +83,34 @@ const AlarmManager = (function () {
    * y genera/resuelve alarmas automáticamente. Se llama desde scada-core.js ~2s.
    */
   function evaluateAlarms() {
-    const pv = window.processVars;
+    const pv = { ...window.processVars };
+    
+    // Merge HMI manual values (higher priority)
+    if (window.HMIStore) {
+      const hmiVals = window.HMIStore.getAll();
+      Object.entries(hmiVals).forEach(([id, val]) => {
+        const tagProps = window.TAG_PROPERTIES_DB?.[id];
+        if (tagProps) {
+          pv[id] = {
+            ...pv[id],
+            val: val.value,
+            unit: val.unit,
+            alarmHi: tagProps.alarms?.crit_max || tagProps.alarms?.max,
+            alarmLo: tagProps.alarms?.crit_min || tagProps.alarms?.min
+          };
+        } else {
+          pv[id] = { ...pv[id], val: val.value, unit: val.unit };
+        }
+      });
+    }
+
     if (!pv) return;
     const now = new Date().toLocaleTimeString();
     let changed = false;
 
     Object.keys(pv).forEach(id => {
       const v = pv[id];
-      if (v.val == null || v.min == null) return;
+      if (v.val == null) return;
       const val = typeof v.val === 'number' ? v.val : parseFloat(v.val);
       if (isNaN(val)) return;
 
@@ -115,7 +135,7 @@ const AlarmManager = (function () {
       if (priority) {
         const prev = _activeAlarms[id];
         if (!prev || prev.status === 'RESUELTA' || prev.status === 'RESOLVED') {
-          _activeAlarms[id] = {
+          const alarmEntry = {
             tag: v.name || id,
             id,
             desc,
@@ -125,11 +145,15 @@ const AlarmManager = (function () {
             priority,
             status: 'ACTIVA',
           };
+          _activeAlarms[id] = alarmEntry;
           addHistory({ action: 'ALARMA', tag: v.name || id, note: desc });
           if (sounds[priority]) sounds[priority]();
           changed = true;
           if (typeof window.showNotif === 'function') {
             window.showNotif('🔴 ' + desc, 'error');
+          }
+          if (window.scadaBus) {
+            window.scadaBus.emit('alarm:triggered', { varId: id, ...alarmEntry });
           }
         }
       } else {
@@ -144,6 +168,9 @@ const AlarmManager = (function () {
           });
           if (sounds.resolved) sounds.resolved();
           changed = true;
+          if (window.scadaBus) {
+            window.scadaBus.emit('alarm:resolved', { varId: id, tag: prev.tag });
+          }
         }
       }
     });
