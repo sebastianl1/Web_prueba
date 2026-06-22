@@ -79,97 +79,130 @@ const AlarmManager = (function () {
   let _activeAlarms = {};
 
   /**
-   * Evalúa todas las variables de proceso contra sus umbrales (min/max/alarmHi/alarmLo)
-   * y genera/resuelve alarmas automáticamente. Se llama desde scada-core.js ~2s.
+   * Calcula el rango aceptable para una sub-variable según su unidad y valor original.
+   * Se usa para alarmas de sub-variables en el HMI.
+   */
+  function _getSubVarRange(origVal, unit) {
+    if (origVal == null) return null;
+    var v = parseFloat(origVal);
+    if (isNaN(v)) return null;
+    var u = (unit || '').toLowerCase();
+    var pct = 0.20; // default 20 %
+
+    if (u.includes('°c') || u.includes('°f') || u === 'k' || u.includes('kelvin')) pct = 0.15;
+    else if (u.includes('bar') || u.includes('psi') || u.includes('pa') || u.includes('atm') || u.includes('mpa')) pct = 0.25;
+    else if (u.includes('l') || u.includes('m³') || u.includes('gal') || u.includes('m3') || u.includes('m^3')) pct = 0.10;
+    else if (u.includes('/min') || u.includes('/h') || u.includes('/s') || u.includes('gpm')) pct = 0.15;
+    else if (u.includes('%')) pct = 0.05;
+    else if (u.includes('ph')) return { min: Math.max(0, v - 0.5), max: Math.min(14, v + 0.5), pct: '±0.5' };
+    else if (u.includes('kg/m³') || u.includes('g/cm³') || u.includes('kg/m3') || u.includes('kg/l')) pct = 0.10;
+    else if (u.includes('cp') || u.includes('pa·s') || u.includes('pas') || u.includes('mpa·s')) pct = 0.15;
+
+    if (Math.abs(v) < 1) pct = Math.max(pct, 0.50);
+    var range = Math.max(Math.abs(v) * pct, 0.5);
+    return { min: v - range, max: v + range, pct: '±' + Math.round(pct * 100) + '%' };
+  }
+
+  // Expose for HMI display
+  window.__getSubVarRange = function (origVal, unit) {
+    return _getSubVarRange(origVal, unit);
+  };
+
+  /**
+   * Evalúa únicamente las sub-variables editadas manualmente en el HMI
+   * contra sus rangos aceptables. No usa processVars ni umbrales predefinidos.
    */
   function evaluateAlarms() {
-    const pv = { ...window.processVars };
-    
-    // Merge HMI manual values (higher priority)
-    if (window.HMIStore) {
-      const hmiVals = window.HMIStore.getAll();
-      Object.entries(hmiVals).forEach(([id, val]) => {
-        const tagProps = window.TAG_PROPERTIES_DB?.[id];
-        if (tagProps) {
-          pv[id] = {
-            ...pv[id],
-            val: val.value,
-            unit: val.unit,
-            alarmHi: tagProps.alarms?.crit_max || tagProps.alarms?.max,
-            alarmLo: tagProps.alarms?.crit_min || tagProps.alarms?.min
-          };
-        } else {
-          pv[id] = { ...pv[id], val: val.value, unit: val.unit };
-        }
-      });
-    }
+    if (!window.__hmiSubVars) return;
 
-    if (!pv) return;
-    const now = new Date().toLocaleTimeString();
-    let changed = false;
+    var now = new Date().toLocaleTimeString();
+    var changed = false;
+    var svKeys = Object.keys(window.__hmiSubVars);
 
-    Object.keys(pv).forEach(id => {
-      const v = pv[id];
-      if (v.val == null) return;
-      const val = typeof v.val === 'number' ? v.val : parseFloat(v.val);
-      if (isNaN(val)) return;
+    svKeys.forEach(function (key) {
+      var parts = key.split('|');
+      if (parts.length !== 3) return;
+      var tagId = parts[0], cat = parts[1], subKey = parts[2];
+      var tagProps = window.TAG_PROPERTIES_DB ? window.TAG_PROPERTIES_DB[tagId] : null;
+      if (!tagProps || !tagProps[cat]) return;
 
-      const hi = v.alarmHi != null ? v.alarmHi : v.max;
-      const lo = v.alarmLo != null ? v.alarmLo : v.min;
-      const useCritical = v.alarmHi != null || v.alarmLo != null;
+      var arr = tagProps[cat];
+      var sv = null;
+      for (var si = 0; si < arr.length; si++) {
+        if (arr[si].key === subKey) { sv = arr[si]; break; }
+      }
+      if (!sv) return;
 
-      let priority = null;
-      let limit = '';
-      let desc = '';
+      var overrideVal = parseFloat(window.__hmiSubVars[key]);
+      if (isNaN(overrideVal)) return;
 
-      if (val > hi) {
-        priority = useCritical ? 'critical' : 'high';
-        limit = `> ${hi} ${v.unit || ''}`;
-        desc = `${v.name || id} excede límite ${useCritical ? 'crítico' : 'superior'} (${val.toFixed(2)} ${v.unit || ''})`;
-      } else if (val < lo) {
-        priority = useCritical ? 'critical' : 'high';
-        limit = `< ${lo} ${v.unit || ''}`;
-        desc = `${v.name || id} bajo límite ${useCritical ? 'crítico' : 'inferior'} (${val.toFixed(2)} ${v.unit || ''})`;
+      var origVal = typeof window.__hmiGetSubVarOriginal === 'function'
+        ? window.__hmiGetSubVarOriginal(tagId, cat, subKey) : sv.value;
+      var range = _getSubVarRange(origVal, sv.unit);
+      if (!range) return;
+
+      var priority = null, limit = '', desc = '';
+      if (overrideVal > range.max) {
+        priority = 'high';
+        limit = '> ' + range.max.toFixed(2) + ' ' + (sv.unit || '');
+        desc = tagId + '.' + subKey + ' excede rango (' + overrideVal.toFixed(2) + ' ' + (sv.unit || '') + ', máx ' + range.max.toFixed(2) + ')';
+      } else if (overrideVal < range.min) {
+        priority = 'high';
+        limit = '< ' + range.min.toFixed(2) + ' ' + (sv.unit || '');
+        desc = tagId + '.' + subKey + ' bajo rango (' + overrideVal.toFixed(2) + ' ' + (sv.unit || '') + ', mín ' + range.min.toFixed(2) + ')';
       }
 
       if (priority) {
-        const prev = _activeAlarms[id];
+        var prev = _activeAlarms[key];
         if (!prev || prev.status === 'RESUELTA' || prev.status === 'RESOLVED') {
-          const alarmEntry = {
-            tag: v.name || id,
-            id,
-            desc,
-            val: `${val.toFixed(2)} ${v.unit || ''}`,
-            limit,
+          _activeAlarms[key] = {
+            tag: tagId + '.' + subKey,
+            id: key,
+            desc: desc,
+            val: overrideVal.toFixed(2) + ' ' + (sv.unit || ''),
+            limit: limit,
             time: now,
-            priority,
+            priority: priority,
             status: 'ACTIVA',
           };
-          _activeAlarms[id] = alarmEntry;
-          addHistory({ action: 'ALARMA', tag: v.name || id, note: desc });
+          addHistory({ action: 'ALARMA', tag: tagId + '.' + subKey, note: desc });
           if (sounds[priority]) sounds[priority]();
           changed = true;
           if (typeof window.showNotif === 'function') {
             window.showNotif('🔴 ' + desc, 'error');
           }
           if (window.scadaBus) {
-            window.scadaBus.emit('alarm:triggered', { varId: id, ...alarmEntry });
+            window.scadaBus.emit('alarm:triggered', { varId: key, tag: tagId + '.' + subKey, desc: desc });
           }
         }
       } else {
-        const prev = _activeAlarms[id];
+        var prev = _activeAlarms[key];
         if (prev && prev.status === 'ACTIVA') {
           prev.status = 'RESUELTA';
           prev.time = now;
-          addHistory({
-            action: 'RESUELTA',
-            tag: v.name || id,
-            note: `${v.name || id} dentro de rango normal (${val.toFixed(2)} ${v.unit || ''})`,
-          });
+          addHistory({ action: 'RESUELTA', tag: tagId + '.' + subKey, note: tagId + '.' + subKey + ' dentro de rango normal' });
           if (sounds.resolved) sounds.resolved();
           changed = true;
           if (window.scadaBus) {
-            window.scadaBus.emit('alarm:resolved', { varId: id, tag: prev.tag });
+            window.scadaBus.emit('alarm:resolved', { varId: key, tag: prev.tag });
+          }
+        }
+      }
+    });
+
+    // Resolve sub-var alarms whose overrides were cleared (revert)
+    Object.keys(_activeAlarms).forEach(function (aid) {
+      if (aid.indexOf('|') === -1) return;
+      if (svKeys.indexOf(aid) === -1) {
+        var prev = _activeAlarms[aid];
+        if (prev && prev.status === 'ACTIVA') {
+          prev.status = 'RESUELTA';
+          prev.time = now;
+          addHistory({ action: 'RESUELTA', tag: prev.tag, note: 'Valor restaurado a rango normal' });
+          if (sounds.resolved) sounds.resolved();
+          changed = true;
+          if (window.scadaBus) {
+            window.scadaBus.emit('alarm:resolved', { varId: aid, tag: prev.tag });
           }
         }
       }

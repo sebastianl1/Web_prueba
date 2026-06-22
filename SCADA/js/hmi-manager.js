@@ -26,6 +26,13 @@
   // ─── HELPERS ──────────────────────────────────────────────────────
   function _isQ(v) { return v != null && v !== '--' && v !== '' && /^[\d<>\-–.\s]+$/.test(String(v).trim()); }
 
+  function _formatRange(origVal, unit) {
+    if (typeof window.__getSubVarRange !== 'function') return '';
+    var r = window.__getSubVarRange(origVal, unit);
+    if (!r) return '';
+    return r.min.toFixed(1) + ' - ' + r.max.toFixed(1) + ' ' + (unit || '') + ' (' + r.pct + ')';
+  }
+
   function _getDisplayValue(varId) {
     var st = window.HMIStore && window.HMIStore.get(varId);
     if (st && st.value != null) return { value: st.value, unit: st.unit || '', source: 'manual' };
@@ -176,10 +183,18 @@
     _revertTimers = {};
     _subVarOverrides = {};
     _originalValues = {};
+    window.__hmiSubVars = _subVarOverrides;
     try { localStorage.removeItem('scada_hmi_subvars'); } catch (e) {}
   }
 
   _loadSubVarOverrides();
+
+  // Expose sub-var data for alarm-manager
+  window.__hmiSubVars = _subVarOverrides;
+  window.__hmiGetSubVarOriginal = function (tagId, cat, key) {
+    var k = tagId + '|' + cat + '|' + key;
+    return _originalValues[k] !== undefined ? _originalValues[k] : null;
+  };
 
   // ─── GET EQUIPMENT TAGS PER PU ──────────────────────────────────
   function _getEquipTags(view) {
@@ -571,9 +586,14 @@
       arr.forEach(function (p) {
         var overrideVal = _getSubVar(varId, cat, p.key);
         var val = overrideVal !== null ? overrideVal : (p.value || '');
-        html += '  <div class="hmi-prow" style="display:flex;align-items:center;gap:8px"><span class="l" style="flex-shrink:0;min-width:80px;font-size:14px;color:var(--text-muted)">' + p.label + '</span>';
-        html += '<input type="text" id="hmi_inp_' + catIdx + '" value="' + val + '" data-tag="' + varId + '" data-cat="' + cat + '" data-key="' + p.key + '" data-unit="' + (p.unit || '') + '" style="flex:1;min-width:0;background:rgba(15,23,42,0.6);border:1px solid rgba(48,54,61,0.5);border-radius:5px;padding:8px 12px;color:var(--text-primary);font-family:JetBrains Mono,monospace;font-size:15px;text-align:right;width:auto;height:36px">';
-        html += '<span style="font-size:13px;color:var(--text-muted);min-width:32px;text-align:left">' + (p.unit || '') + '</span>';
+        var rangeStr = _formatRange(p.value, p.unit);
+        html += '  <div class="hmi-prow" style="display:flex;align-items:center;gap:8px"><span class="l" style="flex-shrink:0;min-width:80px;font-size:11px;color:var(--text-muted)">' + p.label + '</span>';
+        html += '<input type="text" id="hmi_inp_' + catIdx + '" value="' + val + '" data-tag="' + varId + '" data-cat="' + cat + '" data-key="' + p.key + '" data-unit="' + (p.unit || '') + '" style="flex:1;min-width:0;background:rgba(15,23,42,0.6);border:1px solid rgba(48,54,61,0.5);border-radius:5px;padding:8px 12px;color:var(--text-primary);font-family:JetBrains Mono,monospace;font-size:17px;text-align:right;width:auto;height:40px">';
+        if (rangeStr) {
+          html += '<span style="font-size:10px;color:var(--text-muted);min-width:130px;text-align:left;line-height:1.3;opacity:0.7">' + rangeStr + '</span>';
+        } else {
+          html += '<span style="font-size:13px;color:var(--text-muted);min-width:32px;text-align:left">' + (p.unit || '') + '</span>';
+        }
         html += '</div>';
         catIdx++;
       });
@@ -643,10 +663,10 @@
         '#hmiModalOverlay .hmiMpane{display:none;padding:10px 20px;max-height:300px;overflow-y:auto}' +
         '#hmiModalOverlay .hmiMpane.active{display:block}' +
         '#hmiModalOverlay .hmiMrow{display:flex;align-items:center;gap:10px;padding:7px 0;font-size:14px;border-bottom:1px solid rgba(48,54,61,0.08)}' +
-        '#hmiModalOverlay .hmiMrow .ml{color:var(--text-muted);width:140px;flex-shrink:0;font-size:14px}' +
-        '#hmiModalOverlay .hmiMrow input{flex:1;background:rgba(15,23,42,0.6);border:1px solid rgba(48,54,61,0.5);border-radius:5px;padding:8px 12px;color:var(--text-primary);font-family:JetBrains Mono,monospace;font-size:16px;text-align:right;height:38px}' +
+        '#hmiModalOverlay .hmiMrow .ml{color:var(--text-muted);width:140px;flex-shrink:0;font-size:11px}' +
+        '#hmiModalOverlay .hmiMrow input{flex:1;background:rgba(15,23,42,0.6);border:1px solid rgba(48,54,61,0.5);border-radius:5px;padding:8px 12px;color:var(--text-primary);font-family:JetBrains Mono,monospace;font-size:18px;text-align:right;height:42px}' +
         '#hmiModalOverlay .hmiMrow input:focus{border-color:var(--accent-cyan);outline:none}' +
-        '#hmiModalOverlay .hmiMrow .mu{font-size:14px;color:var(--text-muted);min-width:32px}' +
+        '#hmiModalOverlay .hmiMrow .mu{font-size:11px;color:var(--text-muted);min-width:32px}' +
         '#hmiModalOverlay .hmiMfoot{padding:10px 20px 16px;border-top:1px solid rgba(48,54,61,0.3);display:flex;gap:8px}' +
         '#hmiModalOverlay .hmiMfoot button{flex:1;padding:7px;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer;transition:all 0.12s}' +
         '#hmiModalOverlay .hmiMfoot .cancel{background:transparent;border:1px solid rgba(48,54,61,0.5);color:var(--text-primary)}' +
@@ -671,10 +691,12 @@
       arr.forEach(function (p) {
         var overrideVal = _getSubVar(varId, cat, p.key);
         var val = overrideVal !== null ? overrideVal : (p.value || '');
+        var rangeStr = _formatRange(p.value, p.unit);
         rows += '<div class="hmiMrow">' +
           '<span class="ml">' + p.label + '</span>' +
           '<input type="text" id="hm_' + flatIdx + '" value="' + val + '" data-tag="' + varId + '" data-cat="' + cat + '" data-key="' + p.key + '">' +
           '<span class="mu">' + (p.unit || '') + '</span>' +
+          (rangeStr ? '<span style="font-size:9px;color:var(--text-muted);opacity:0.6;min-width:100px;text-align:right">' + rangeStr + '</span>' : '') +
           '</div>';
         flatIdx++;
       });
@@ -797,90 +819,8 @@
     // Reset in-memory alarm data
     if (window.alarmData) window.alarmData = [];
     if (window.AlarmManager && window.AlarmManager._reset) window.AlarmManager._reset();
-
-    // Generate 2-3 random alarms
-    setTimeout(function () {
-      var db = window.TAG_PROPERTIES_DB;
-      if (!db) return;
-
-      var candidates = [];
-      Object.keys(db).forEach(function (id) {
-        var p = db[id];
-        if (p && p.alarms && (p.alarms.crit_max != null)) candidates.push(id);
-      });
-
-      if (candidates.length === 0) {
-        Object.keys(db).forEach(function (id) {
-          var p = db[id];
-          if (p && p.alarms && (p.alarms.max != null)) candidates.push(id);
-        });
-      }
-
-      if (candidates.length === 0) return;
-
-      var count = Math.min(2 + Math.floor(Math.random() * 2), candidates.length); // 2 or 3
-
-      // Shuffle
-      for (var si = candidates.length - 1; si > 0; si--) {
-        var sj = Math.floor(Math.random() * (si + 1));
-        var tmp = candidates[si]; candidates[si] = candidates[sj]; candidates[sj] = tmp;
-      }
-
-      var triggered = [];
-      for (var ri = 0; ri < count; ri++) {
-        var tagId = candidates[ri];
-        var p = db[tagId];
-        if (!p || !p.alarms) continue;
-
-        var targetVal = null;
-        var threshold = null;
-        var unit = (p.physical && p.physical[0] && p.physical[0].unit) || p.unit || '';
-
-        // Prefer exceeding the critical max
-        if (p.alarms.crit_max != null) {
-          targetVal = p.alarms.crit_max + (Math.random() * 10 + 1);
-          threshold = 'crit_max=' + p.alarms.crit_max;
-        } else if (p.alarms.max != null) {
-          targetVal = p.alarms.max + (Math.random() * 5 + 1);
-          threshold = 'max=' + p.alarms.max;
-        } else if (p.alarms.crit_min != null) {
-          targetVal = p.alarms.crit_min - (Math.random() * 10 + 1);
-          threshold = 'crit_min=' + p.alarms.crit_min;
-        } else if (p.alarms.min != null) {
-          targetVal = p.alarms.min - (Math.random() * 5 + 1);
-          threshold = 'min=' + p.alarms.min;
-        }
-
-        if (targetVal !== null) {
-          targetVal = Math.round(targetVal * 100) / 100;
-          // Set via HMIStore so the alarm evaluator picks it up
-          if (window.HMIStore) {
-            window.HMIStore.set(tagId, String(targetVal), unit);
-            // Also update TAG_PROPERTIES_DB physical[0] value
-            if (p.physical && p.physical[0]) {
-              p.physical[0].value = String(targetVal);
-            }
-          }
-          triggered.push(tagId + '=' + targetVal + ' (' + threshold + ')');
-        }
-      }
-
-      if (triggered.length > 0) {
-        console.log('[HMI] Alarms aleatorias generadas:', triggered.join(', '));
-        window._hmiRandomAlarms = triggered;
-        // Force alarm evaluation
-        if (window.AlarmManager && typeof window.AlarmManager.evaluateNow === 'function') {
-          window.AlarmManager.evaluateNow();
-        }
-      }
-    }, 1000);
   }
 
-  // Run startup after DOM ready
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', _startup);
-  } else {
-    _startup();
-  }
+  _startup();
 
 })();
