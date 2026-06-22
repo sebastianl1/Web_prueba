@@ -264,18 +264,6 @@
     p.querySelector('#tagInspectorTag').textContent  = v.tag || v.id;
     p.querySelector('#tagInspectorDesc').textContent = v.desc || v.id || '';
 
-    const db = window.TAG_PROPERTIES_DB || {};
-    const props = db[v.id];
-    const lawEl = document.getElementById('tagInspectorLaw');
-    if (lawEl) {
-      const all = _getAllInspectorPropsFlat(v.id);
-      if (window._theoCycleIndex == null) window._theoCycleIndex = {};
-      const idx = (window._theoCycleIndex[v.id] || 0) % (all.length || 1);
-      const current = all[idx];
-      const unit = current ? ((current.unit && current.unit.trim()) || _inferUnitFromLabel(current.label)) : '';
-      lawEl.textContent = current ? `${current.label}: ${current.value} ${unit}` : '';
-    }
-
     const tv = _getInspectorDisplayValue(v.id);
     p.querySelector('#tagInspectorUnit').textContent = tv.unit;
     p.querySelector('#tagInspectorSrc').textContent  = source ? 'desde ' + source : '';
@@ -293,12 +281,16 @@
     const valEl = document.getElementById('tagInspectorVal');
     const unitEl = document.getElementById('tagInspectorUnit');
     const timeEl = document.getElementById('tagInspectorTime');
+    const lawEl = document.getElementById('tagInspectorLaw');
     if (!valEl) return;
     const tv = _getInspectorDisplayValue(activeVar.id);
     valEl.textContent = tv.value;
     if (unitEl) unitEl.textContent = tv.unit;
+    if (lawEl) {
+      lawEl.textContent = tv.label ? tv.label + ': ' + tv.value + ' ' + tv.unit : '';
+    }
     if (timeEl) {
-      timeEl.textContent = tv.label ? '📋 ' + tv.label : '📋 Marco teórico';
+      timeEl.textContent = tv.label ? '\u{1F4CB} ' + tv.label : '\u{1F4CB} Marco te\u00f3rico';
     }
   }
   // Refresco cada 2s para seguir el ciclo del dashboard

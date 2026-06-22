@@ -1147,12 +1147,12 @@ const BalanceManager = (function () {
           '</span>';
       }).join('');
 
-      return '<div style="display:flex;align-items:center;gap:6px;padding:4px 0;font-size:11px;border-bottom:1px solid rgba(48,54,61,0.08)">' +
-        '<button class="tag-detail-btn" data-tag="' + tagId + '" style="background:none;border:none;color:var(--accent-cyan);font-weight:700;font-family:JetBrains Mono,monospace;font-size:11px;cursor:pointer;padding:2px 6px;border-radius:4px;min-width:75px;text-align:left;transition:all 0.12s">' +
+      return '<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid rgba(48,54,61,0.08)">' +
+        '<button class="tag-detail-btn" data-tag="' + tagId + '" style="background:none;border:none;color:var(--accent-cyan);font-weight:700;font-family:JetBrains Mono,monospace;cursor:pointer;padding:2px 6px;border-radius:4px;min-width:75px;text-align:left;transition:all 0.12s">' +
           tagId +
         '</button>' +
         '<div style="flex:1;min-width:0">' +
-          '<div style="color:var(--text-primary);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + desc + '</div>' +
+          '<div style="color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + desc + '</div>' +
         '</div>' +
         '<div style="text-align:right;display:flex;flex-wrap:wrap;gap:1px;justify-content:flex-end">' +
           valCells +

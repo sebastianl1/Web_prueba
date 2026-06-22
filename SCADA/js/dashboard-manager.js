@@ -232,11 +232,6 @@ function _inferUnitFromLabel(label) {
 }
 
 function _getTheoreticalDisplayValue(varId) {
-  // 1. Check HMI manual input FIRST
-  const hmiVal = window.HMIStore?.get(varId);
-  if (hmiVal) return { value: hmiVal.value, unit: hmiVal.unit, label: '🖐 Manual' };
-
-  // 2. Fallback to theoretical cycling
   const all = _getAllPropsFlat(varId);
   if (!all.length) return { value: varId, unit: '' };
   if (window._theoCycleIndex[varId] == null) window._theoCycleIndex[varId] = 0;
@@ -249,9 +244,6 @@ function _getTheoreticalDisplayValue(varId) {
 function _advanceCycleIndex() {
   const db = window.TAG_PROPERTIES_DB || {};
   Object.keys(db).forEach(function(varId) {
-    // Skip cycling for tags currently being manually set via HMI
-    if (window.HMIStore?.has(varId)) return;
-
     if (window._theoCycleIndex[varId] == null) window._theoCycleIndex[varId] = 0;
     window._theoCycleIndex[varId]++;
   });
