@@ -1757,3 +1757,75 @@ a:hover {
 
 .hamburger::before { top: -6px; }
 .hamburger::after  { top: 6px; }
+
+/* ─── Balance M&E ──────────────────────────────── */
+#balanceContent {
+  display: block;
+}
+
+.pu-selector-btn {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  color: var(--text-secondary);
+  padding: 7px 16px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.pu-selector-btn:hover {
+  border-color: var(--primary);
+  color: var(--text-primary);
+  background: var(--primary-soft);
+}
+
+.pu-selector-btn.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+
+#puCards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  min-height: 400px;
+}
+
+#puCards > .panel {
+  min-width: 0;
+  overflow: hidden;
+}
+
+@media (max-width: 1199px) {
+  #puCards {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+  #puCards > .panel:last-child {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 767px) {
+  #puCards {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    min-height: auto;
+  }
+  #puCards > .panel:last-child {
+    grid-column: auto;
+  }
+  #puCards .panel-body {
+    padding: 8px 10px;
+  }
+}
+
+@media (max-width: 479px) {
+  #puCards {
+    gap: 8px;
+  }
+}

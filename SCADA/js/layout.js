@@ -54,6 +54,12 @@ window.showTab = function(tabId) {
   }
 
   // Acciones por tab
+  // Stop Balance M&E updates when leaving the tab
+  if (window._lastTab === 'ai' && tabId !== 'ai' && typeof BalanceManager !== 'undefined') {
+    BalanceManager.stopUpdates();
+  }
+  window._lastTab = tabId;
+
   if (tabId === 'files' && typeof window.refreshFiles === 'function') window.refreshFiles();
   if (tabId === 'config' && typeof window.setConfigSubTab === 'function') {
     const firstItem = document.querySelector('.config-nav-item');
@@ -69,7 +75,7 @@ window.showTab = function(tabId) {
   }
   if (tabId === 'alarms' && typeof populateAlarmTable === 'function') populateAlarmTable();
   if (tabId === 'config' && typeof populateTags === 'function') populateTags();
-  if (tabId === 'ai' && typeof BalanceManager !== 'undefined') BalanceManager.updateBalances();
+  if (tabId === 'ai' && typeof BalanceManager !== 'undefined') BalanceManager.startUpdates();
   if (tabId === 'hmi' && typeof window._setupHMITools === 'function') window._setupHMITools();
 
 };
