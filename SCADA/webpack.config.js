@@ -98,7 +98,8 @@ module.exports = {
     // Sirve archivos estáticos desde SCADA/ (index.html, assets, css, js originales)
     static: {
       directory: Path.join(__dirname, "."),
-      publicPath: "/"
+      publicPath: "/",
+      watch: { ignored: /node_modules/ }
     },
     // Los bundles compilados (dist/js/app.js, dist/css/app.css) se sirven
     // en memoria desde / gracias al publicPath: "/" del output

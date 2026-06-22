@@ -4,7 +4,7 @@
   "description": "SCADA — Sistema de Control Industrial",
   "private": true,
   "scripts": {
-    "start": "webpack serve --config webpack.config.js --progress",
+    "start": "node node_modules/.bin/webpack serve --config webpack.config.js --progress",
     "build": "cross-env NODE_ENV=production webpack --config webpack.config.js --progress",
     "watch": "webpack --config webpack.config.js --watch --progress"
   },
