@@ -29,13 +29,15 @@ const CalendarManager = (function () {
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(day).padStart(2, '0');
   }
 
+  const TECH_NAMES = { SEB: 'Sebastian', PAO: 'Paola', YEN: 'Yenevid' };
+
   const defaultEvents = [
-    { id: 'e1', date: _defDate(7),  title: 'Revisión Bomba B-204',      type: 'danger',  time: '',      desc: 'Vibración crítica detectada por ML',       tech: 'JP', status: 'pending', equipment: 'B-204' },
-    { id: 'e2', date: _defDate(8),  title: 'Inspección HX-102',         type: 'primary', time: '08:00', desc: 'Limpieza química programada',               tech: 'MR', status: 'pending', equipment: 'HX-102' },
-    { id: 'e3', date: _defDate(12), title: 'Cambio filtros C-301',       type: 'warning', time: '14:00', desc: 'Mantenimiento preventivo trimestral',        tech: 'JP', status: 'pending', equipment: 'C-301' },
-    { id: 'e4', date: _defDate(18), title: 'Revisión válvulas V-301',    type: 'warning', time: '09:00', desc: 'Inspección semestral de válvulas',           tech: 'CA', status: 'pending', equipment: 'V-301' },
-    { id: 'e5', date: _defDate(4),  title: 'Calibración PT-201',         type: 'success', time: '',      desc: 'Calibración semestral realizada',            tech: 'MR', status: 'done',    equipment: 'R-201' },
-    { id: 'e6', date: _defDate(1),  title: 'Mantenimiento Compresor',    type: 'danger',  time: '10:00', desc: 'Revisión urgente por presión anormal',       tech: 'JP', status: 'done',    equipment: 'C-301' },
+    { id: 'e1', date: _defDate(7),  title: 'Revisión Tanque Aceite Crudo',  type: 'danger',  time: '',      desc: 'Nivel crítico detectado por alarma en TK-01', tech: 'SEB', status: 'pending', equipment: 'TK-01' },
+    { id: 'e2', date: _defDate(8),  title: 'Limpieza Filtro Aceite',        type: 'primary', time: '08:00', desc: 'Mantenimiento preventivo programado',          tech: 'PAO', status: 'pending', equipment: 'FL-01' },
+    { id: 'e3', date: _defDate(12), title: 'Calibración Bomba B-01',        type: 'warning', time: '14:00', desc: 'Revisión trimestral de bomba de transferencia', tech: 'YEN', status: 'pending', equipment: 'B-01'  },
+    { id: 'e4', date: _defDate(18), title: 'Inspección Intercambiador',     type: 'warning', time: '09:00', desc: 'Limpieza química de intercambiador de calor',   tech: 'SEB', status: 'pending', equipment: 'HX-01' },
+    { id: 'e5', date: _defDate(4),  title: 'Verificación Panel Control',    type: 'success', time: '',      desc: 'Calibración de sensores del PLC-1 realizada',  tech: 'PAO', status: 'done',    equipment: 'PLC-1'},
+    { id: 'e6', date: _defDate(1),  title: 'Revisión Sistema Circulación',  type: 'danger',  time: '10:00', desc: 'Presión anormal detectada en SC-01',            tech: 'YEN', status: 'done',    equipment: 'SC-01' },
   ];
 
   function load() {
@@ -92,13 +94,23 @@ const CalendarManager = (function () {
         .sort((a, b) => b.date.localeCompare(a.date))[0];
       const next = pending.sort((a, b) => a.date.localeCompare(b.date))[0];
       const score = _calcHealthScore(id);
-      const inAlarm = equip.vars.some(varId => ad.some(a => a.id === varId || a.tag === varId));
+      const inAlarm = equip.vars.some(function (varId) {
+        return ad.some(function (a) {
+          if (a.id === varId || a.tag === varId) return true;
+          if (a.id.indexOf('|') > -1) return a.id.split('|')[0] === varId;
+          return false;
+        });
+      });
 
       // Live values
       const liveVals = equip.vars.map(varId => {
         const v = pv[varId];
         if (!v || typeof v.val !== 'number') return null;
-        const inA = ad.some(a => a.id === varId || a.tag === varId);
+        const inA = ad.some(function (a) {
+          if (a.id === varId || a.tag === varId) return true;
+          if (a.id.indexOf('|') > -1) return a.id.split('|')[0] === varId;
+          return false;
+        });
         return { varId, val: v.val, unit: v.unit || '', inAlarm: inA };
       }).filter(Boolean);
 
@@ -310,7 +322,13 @@ const CalendarManager = (function () {
         const scoreColor = score === null ? null : score >= 80 ? 'var(--success)' : score >= 50 ? 'var(--accent-amber)' : 'var(--danger)';
 
         // Check if equipment has active alarms
-        const hasAlarm = equip ? equip.vars.some(varId => ad.some(a => a.id === varId || a.tag === varId)) : false;
+        const hasAlarm = equip ? equip.vars.some(function (varId) {
+          return ad.some(function (a) {
+            if (a.id === varId || a.tag === varId) return true;
+            if (a.id.indexOf('|') > -1) return a.id.split('|')[0] === varId;
+            return false;
+          });
+        }) : false;
 
         return `
           <div class="cal-event-row" data-equipment="${e.equipment || ''}"
@@ -325,7 +343,7 @@ const CalendarManager = (function () {
               </div>
               <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:${color}">${isDone ? '✓ COMPLETADO' : (e.time ? e.date.slice(5).split('-').reverse().join(' ') + ' · ' + e.time : dayStr)}</div>
               ${e.desc ? `<div style="font-size:11px;color:var(--text-muted);margin-top:3px">${e.desc}</div>` : ''}
-              ${equip ? `<div style="font-size:10px;color:var(--text-muted);margin-top:2px;font-family:'JetBrains Mono',monospace">${e.equipment} — ${equip.tags.join(', ')}</div>` : ''}
+              <div style="font-size:10px;color:var(--text-muted);margin-top:2px;font-family:'JetBrains Mono',monospace">${e.equipment ? e.equipment + ' — ' + EQUIPMENT_REGISTRY[e.equipment]?.tags.join(', ') + ' · ' : ''}Téc: ${TECH_NAMES[e.tech] || e.tech || '—'}</div>
             </div>
             <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;align-items:flex-end">
               <span style="font-size:10px;font-family:'JetBrains Mono',monospace;color:var(--text-muted)">${dayStr}</span>
@@ -367,7 +385,7 @@ const CalendarManager = (function () {
       document.getElementById('calEvTime').value      = e ? (e.time || '') : '';
       document.getElementById('calEvType').value      = e ? e.type  : 'warning';
       document.getElementById('calEvDesc').value      = e ? (e.desc || '') : '';
-      document.getElementById('calEvTech').value      = e ? (e.tech || '') : 'JP';
+      document.getElementById('calEvTech').value      = e ? (e.tech || '') : 'SEB';
       if (document.getElementById('calEvEquip')) {
         document.getElementById('calEvEquip').value   = e ? (e.equipment || '') : '';
       }
@@ -454,9 +472,9 @@ const CalendarManager = (function () {
                 <label style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.1em;color:var(--text-muted);display:block;margin-bottom:5px">TÉCNICO</label>
                 <select id="calEvTech" class="form-select"
                   style="background:var(--bg-card);border-color:var(--border);color:var(--text-primary);font-size:13px">
-                  <option value="JP">Juan Pérez</option>
-                  <option value="MR">María Rodríguez</option>
-                  <option value="CA">Carlos Aguilar</option>
+                  <option value="SEB">Sebastian</option>
+                  <option value="PAO">Paola</option>
+                  <option value="YEN">Yenevid</option>
                 </select>
               </div>
             </div>
@@ -486,9 +504,17 @@ const CalendarManager = (function () {
         // Upgrade dot to danger if equipment has active alarm
         let type = e.type;
         if (e.equipment && EQUIPMENT_REGISTRY[e.equipment]) {
-          const hasAlarm = EQUIPMENT_REGISTRY[e.equipment].vars.some(varId =>
-            ad.some(a => a.id === varId || a.tag === varId)
-          );
+          const hasAlarm = EQUIPMENT_REGISTRY[e.equipment].vars.some(function (varId) {
+            return ad.some(function (a) {
+              if (a.id === varId || a.tag === varId) return true;
+              // Match sub-var alarms by tagId prefix
+              if (a.id.indexOf('|') > -1) {
+                var parts = a.id.split('|');
+                return parts[0] === varId;
+              }
+              return false;
+            });
+          });
           if (hasAlarm) type = 'danger';
         }
         if (!dots[day] || type === 'danger') dots[day] = type;
@@ -504,10 +530,14 @@ const CalendarManager = (function () {
     // Listen for alarm events to auto-schedule maintenance
     if (typeof window.scadaBus !== 'undefined') {
       window.scadaBus.on('alarm:triggered', (detail) => {
+        // Extract tagId (supports both main vars and sub-var overrides)
+        var tagId = detail.varId;
+        if (tagId.indexOf('|') > -1) tagId = tagId.split('|')[0];
+
         // Find equipment associated with the tag
         let equipId = null;
         Object.entries(EQUIPMENT_REGISTRY).forEach(([code, equip]) => {
-          if (equip.tags.includes(detail.tag) || equip.vars.includes(detail.varId)) {
+          if (equip.tags.includes(detail.tag) || equip.vars.includes(tagId) || equip.vars.includes(detail.varId)) {
             equipId = code;
           }
         });
@@ -523,14 +553,14 @@ const CalendarManager = (function () {
         const event = {
           id: 'auto_' + Date.now(),
           date: detail.priority === 'critical' ? nextDate : today,
-          title: `⚠ Mantenimiento Urgente: ${detail.tag}`,
+          title: `⚠ Mantenimiento Urgente: ${tagId} — ${equip.label}`,
           type: detail.priority === 'critical' ? 'danger' : 'warning',
           desc: detail.desc,
-          tech: 'AUTO',
+          tech: 'SEB',
           status: 'pending',
           equipment: equipId,
           autoGenerated: true,
-          sourceTag: detail.tag
+          sourceTag: tagId
         };
 
         api.add(event);

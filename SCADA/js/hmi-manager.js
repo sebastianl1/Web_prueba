@@ -255,7 +255,7 @@
       '#hmiCanvasWrap canvas{cursor:grab}',
       '#hmiCanvasWrap canvas:active{cursor:grabbing}',
       /* ── RIGHT PANEL ── */
-      '#hmiPanel{width:360px;min-width:360px;display:none;flex-direction:column;background:rgba(15,23,42,0.85);border-left:1px solid rgba(48,54,61,0.3);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);z-index:5;overflow-y:auto;animation:slideIn 0.2s ease}',
+      '#hmiPanel{width:400px;min-width:400px;display:none;flex-direction:column;background:rgba(15,23,42,0.85);border-left:1px solid rgba(48,54,61,0.3);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);z-index:5;overflow-y:auto;animation:slideIn 0.2s ease}',
       '#hmiPanel.open{display:flex}',
       '@keyframes slideIn{from{transform:translateX(20px);opacity:0}to{transform:translateX(0);opacity:1}}',
       '#hmiPanel .hmi-phead{display:flex;align-items:center;gap:8px;padding:12px 14px 8px;border-bottom:1px solid rgba(48,54,61,0.3)}',
@@ -587,10 +587,10 @@
         var overrideVal = _getSubVar(varId, cat, p.key);
         var val = overrideVal !== null ? overrideVal : (p.value || '');
         var rangeStr = _formatRange(p.value, p.unit);
-        html += '  <div class="hmi-prow" style="display:flex;align-items:center;gap:8px"><span class="l" style="flex-shrink:0;min-width:80px;font-size:11px;color:var(--text-muted)">' + p.label + '</span>';
-        html += '<input type="text" id="hmi_inp_' + catIdx + '" value="' + val + '" data-tag="' + varId + '" data-cat="' + cat + '" data-key="' + p.key + '" data-unit="' + (p.unit || '') + '" style="flex:1;min-width:0;background:rgba(15,23,42,0.6);border:1px solid rgba(48,54,61,0.5);border-radius:5px;padding:8px 12px;color:var(--text-primary);font-family:JetBrains Mono,monospace;font-size:17px;text-align:right;width:auto;height:40px">';
+        html += '  <div class="hmi-prow" style="display:flex;align-items:center;gap:10px;justify-content:flex-start;padding:6px 0"><span class="l" style="flex-shrink:0;min-width:90px;font-size:12px;color:var(--text-muted);font-weight:500">' + p.label + '</span>';
+        html += '<input type="text" id="hmi_inp_' + catIdx + '" value="' + val + '" data-tag="' + varId + '" data-cat="' + cat + '" data-key="' + p.key + '" data-unit="' + (p.unit || '') + '" style="flex:1;min-width:0;background:rgba(30,50,80,0.7);border:1.5px solid rgba(100,160,255,0.25);border-radius:5px;padding:8px 12px;color:#ffffff;font-family:JetBrains Mono,monospace;font-size:19px;text-align:right;width:auto;height:40px">';
         if (rangeStr) {
-          html += '<span style="font-size:10px;color:var(--text-muted);min-width:130px;text-align:left;line-height:1.3;opacity:0.7">' + rangeStr + '</span>';
+          html += '<span style="font-size:11px;color:var(--text-muted);min-width:130px;text-align:left;line-height:1.3">' + rangeStr + '</span>';
         } else {
           html += '<span style="font-size:13px;color:var(--text-muted);min-width:32px;text-align:left">' + (p.unit || '') + '</span>';
         }
@@ -662,11 +662,11 @@
         '#hmiModalOverlay .hmiMtab.active{color:var(--accent-cyan);border-bottom-color:var(--accent-cyan)}' +
         '#hmiModalOverlay .hmiMpane{display:none;padding:10px 20px;max-height:300px;overflow-y:auto}' +
         '#hmiModalOverlay .hmiMpane.active{display:block}' +
-        '#hmiModalOverlay .hmiMrow{display:flex;align-items:center;gap:10px;padding:7px 0;font-size:14px;border-bottom:1px solid rgba(48,54,61,0.08)}' +
-        '#hmiModalOverlay .hmiMrow .ml{color:var(--text-muted);width:140px;flex-shrink:0;font-size:11px}' +
-        '#hmiModalOverlay .hmiMrow input{flex:1;background:rgba(15,23,42,0.6);border:1px solid rgba(48,54,61,0.5);border-radius:5px;padding:8px 12px;color:var(--text-primary);font-family:JetBrains Mono,monospace;font-size:18px;text-align:right;height:42px}' +
+        '#hmiModalOverlay .hmiMrow{display:flex;align-items:center;gap:10px;padding:8px 0;font-size:14px;border-bottom:1px solid rgba(48,54,61,0.08)}' +
+        '#hmiModalOverlay .hmiMrow .ml{color:var(--text-muted);width:140px;flex-shrink:0;font-size:12px;font-weight:500}' +
+        '#hmiModalOverlay .hmiMrow input{flex:1;background:rgba(30,50,80,0.7);border:1.5px solid rgba(100,160,255,0.25);border-radius:5px;padding:8px 12px;color:#ffffff;font-family:JetBrains Mono,monospace;font-size:19px;text-align:right;height:40px}' +
         '#hmiModalOverlay .hmiMrow input:focus{border-color:var(--accent-cyan);outline:none}' +
-        '#hmiModalOverlay .hmiMrow .mu{font-size:11px;color:var(--text-muted);min-width:32px}' +
+        '#hmiModalOverlay .hmiMrow .mu{font-size:12px;color:var(--text-muted);min-width:32px}' +
         '#hmiModalOverlay .hmiMfoot{padding:10px 20px 16px;border-top:1px solid rgba(48,54,61,0.3);display:flex;gap:8px}' +
         '#hmiModalOverlay .hmiMfoot button{flex:1;padding:7px;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer;transition:all 0.12s}' +
         '#hmiModalOverlay .hmiMfoot .cancel{background:transparent;border:1px solid rgba(48,54,61,0.5);color:var(--text-primary)}' +
