@@ -19,14 +19,18 @@ window._STATIC_PID_SVGS = [
 
 // ─── LISTAR SVGs ──────────────────────────────────────────────────
 window.listPIDSVGs = async function() {
+  console.log('[PID] listPIDSVGs called');
+  const svgs = [...window._STATIC_PID_SVGS];
   try {
     const res = await fetch('/api/files/list?path=/pid');
-    if (!res.ok) throw new Error('API not available');
-    const files = await res.json();
-    return files.filter(f => f.name && f.name.toLowerCase().endsWith('.svg'));
-  } catch {
-    return window._STATIC_PID_SVGS;
-  }
+    if (res.ok) {
+      const files = await res.json();
+      const apiSvgs = files.filter(f => f.name && f.name.toLowerCase().endsWith('.svg'));
+      if (apiSvgs.length) return apiSvgs;
+    }
+  } catch (e) { console.log('[PID] API fallback to static list:', e.message); }
+  console.log('[PID] Returning static list:', svgs.length, 'files');
+  return svgs;
 };
 
 // ─── CARGAR SVG ───────────────────────────────────────────────────
@@ -41,12 +45,13 @@ window.loadPIDSVG = async function(filename) {
 
   let svgText;
   try {
-    const res = await fetch(`/api/files/raw?path=/pid&name=${encodeURIComponent(filename)}`);
+    // Ruta directa funciona tanto en GitHub Pages como en webpack dev server
+    const res = await fetch(`Acceso_seguro/pid/${encodeURIComponent(filename)}`);
     if (!res.ok) throw new Error(`Error ${res.status}`);
     svgText = await res.text();
   } catch {
-    // Fallback: carga directa desde ruta estatica (GitHub Pages, Vite preview)
-    const res = await fetch(`Acceso_seguro/pid/${encodeURIComponent(filename)}`);
+    // Fallback: API del servidor webpack
+    const res = await fetch(`/api/files/raw?path=/pid&name=${encodeURIComponent(filename)}`);
     if (!res.ok) throw new Error(`Error ${res.status}`);
     svgText = await res.text();
   }
@@ -923,12 +928,13 @@ window.listOpUnitSVGs = async function() {
 window.loadOpUnitSVG = async function(path, filename) {
   let svgText;
   try {
-    const res = await fetch(`/api/files/raw?path=${encodeURIComponent(path)}&name=${encodeURIComponent(filename)}`);
+    // Ruta directa funciona tanto en GitHub Pages como en webpack dev server
+    const res = await fetch(`Acceso_seguro/pid/${encodeURIComponent(filename)}`);
     if (!res.ok) throw new Error('HTTP ' + res.status);
     svgText = await res.text();
   } catch {
-    // Fallback: carga directa desde ruta estatica
-    const res = await fetch(`Acceso_seguro/pid/${encodeURIComponent(filename)}`);
+    // Fallback: API del servidor webpack
+    const res = await fetch(`/api/files/raw?path=${encodeURIComponent(path)}&name=${encodeURIComponent(filename)}`);
     if (!res.ok) throw new Error('HTTP ' + res.status);
     svgText = await res.text();
   }
@@ -1184,11 +1190,12 @@ function _showPIDTagsDropdown() {
 
 // ─── FILE LIST ────────────────────────────────────────────────────
 async function _renderPIDFileList() {
+  console.log('[PID] _renderPIDFileList called');
   const listEl = document.getElementById('pidFileList');
   const emptyEl = document.getElementById('pidFileListEmpty');
   const countEl = document.getElementById('pidFileCount');
   const countEl2 = document.getElementById('pidFileCount2');
-  if (!listEl) return;
+  if (!listEl) { console.log('[PID] pidFileList not found'); return; }
 
   try {
     const svgs = await window.listPIDSVGs();
