@@ -56,7 +56,7 @@ window.loadPIDSVG = async function(filename) {
 
   try {
     // Quitar font-size:3px de data-tag (los SVGs de biodiesel lo traen)
-    svgText = svgText.replace(/\[data-tag\]\s*\{[^}]*font-size\s*:\s*3px[^}]*\}/gi, '');
+    svgText = svgText.replace(/font-size\s*:\s*3px\s*!important\s*/gi, '');
 
     // Insertar SVG directamente para interactividad
     container.innerHTML = svgText;
@@ -66,14 +66,14 @@ window.loadPIDSVG = async function(filename) {
       svgEl.style.height = '100%';
       svgEl.style.maxHeight = 'calc(100vh - 200px)';
       svgEl.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-      // Forzar tamaño de texto normal en data-tag
-      const fixStyle = document.createElementNS('http://www.w3.org/2000/svg', 'style');
-      fixStyle.textContent = '[data-tag] { font-size: inherit !important; }';
-      svgEl.insertBefore(fixStyle, svgEl.firstChild);
       _normalizeSVGColors(svgEl);
       _addSVGPanZoom(svgEl);
       _wireSVGHotspots(svgEl);
       _wirePIDLiveValues(svgEl);
+      // Forzar font-size normal en data-tag (inline > CSS !important)
+      svgEl.querySelectorAll('[data-tag]').forEach(el => {
+        el.style.setProperty('font-size', 'inherit', 'important');
+      });
     }
 
     window._pidCurrentFile = filename;
@@ -944,7 +944,7 @@ window.loadOpUnitSVG = async function(path, filename) {
     svgText = await res.text();
   }
   // Quitar font-size:3px de data-tag (los SVGs de biodiesel lo traen)
-  svgText = svgText.replace(/\[data-tag\]\s*\{[^}]*font-size\s*:\s*3px[^}]*\}/gi, '');
+  svgText = svgText.replace(/font-size\s*:\s*3px\s*!important\s*/gi, '');
   try {
     const container = document.getElementById('pidContainer');
     if (!container) return;
@@ -956,14 +956,14 @@ window.loadOpUnitSVG = async function(path, filename) {
       svgEl.style.height = '100%';
       svgEl.style.maxHeight = 'calc(100vh - 200px)';
       svgEl.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-      // Forzar tamaño de texto normal en data-tag
-      const fixStyle = document.createElementNS('http://www.w3.org/2000/svg', 'style');
-      fixStyle.textContent = '[data-tag] { font-size: inherit !important; }';
-      svgEl.insertBefore(fixStyle, svgEl.firstChild);
       window._normalizeSVGColors && window._normalizeSVGColors(svgEl);
       window._addSVGPanZoom && window._addSVGPanZoom(svgEl);
       window._wireSVGHotspots && window._wireSVGHotspots(svgEl);
       window._wirePIDLiveValues && window._wirePIDLiveValues(svgEl);
+      // Forzar font-size normal en data-tag (inline > CSS !important)
+      svgEl.querySelectorAll('[data-tag]').forEach(function(el) {
+        el.style.setProperty('font-size', 'inherit', 'important');
+      });
     }
     window._pidCurrentFile = filename;
     const label = document.getElementById('pidLabel');
