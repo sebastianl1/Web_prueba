@@ -9,6 +9,9 @@
 
 window._3dCurrentModel = null;
 
+// Lista estatica de modelos 3D (fallback para GitHub Pages)
+window._STATIC_3D_MODELS = [];
+
 // ─── LISTA DE MODELOS DISPONIBLES ────────────────────────────────
 window.listGLBModels = async function() {
   try {
@@ -16,7 +19,7 @@ window.listGLBModels = async function() {
     if (!res.ok) return [];
     const files = await res.json();
     return files.filter(f => f.name && f.name.toLowerCase().endsWith('.glb'));
-  } catch { return []; }
+  } catch { return window._STATIC_3D_MODELS; }
 };
 
 // ─── CARGAR GLB ──────────────────────────────────────────────────

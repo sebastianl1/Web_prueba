@@ -10,14 +10,27 @@
 
 window._pidCurrentFile = null;
 
+// Lista estatica de SVGs conocidos (fallback para GitHub Pages)
+window._STATIC_PID_SVGS = [
+  { name: 'CARACTERIZACION_MATERIA_PRIMA.svg',        size: 0 },
+  { name: 'CARACTERIZACION_PRODUCTO_FINAL.svg',       size: 0 },
+  { name: 'ESTERIFICACION_TRANSESTERIFICACION.svg',   size: 0 },
+];
+
 // ─── LISTAR SVGs ──────────────────────────────────────────────────
 window.listPIDSVGs = async function() {
+  console.log('[PID] listPIDSVGs called');
+  const svgs = [...window._STATIC_PID_SVGS];
   try {
     const res = await fetch('/api/files/list?path=/pid');
-    if (!res.ok) return [];
-    const files = await res.json();
-    return files.filter(f => f.name && f.name.toLowerCase().endsWith('.svg'));
-  } catch { return []; }
+    if (res.ok) {
+      const files = await res.json();
+      const apiSvgs = files.filter(f => f.name && f.name.toLowerCase().endsWith('.svg'));
+      if (apiSvgs.length) return apiSvgs;
+    }
+  } catch (e) { console.log('[PID] API fallback to static list:', e.message); }
+  console.log('[PID] Returning static list:', svgs.length, 'files');
+  return svgs;
 };
 
 // ─── CARGAR SVG ───────────────────────────────────────────────────
@@ -30,11 +43,20 @@ window.loadPIDSVG = async function(filename) {
     Cargando P&ID: ${filename}...
   </div>`;
 
+  let svgText;
   try {
+    // Ruta directa funciona tanto en GitHub Pages como en webpack dev server
+    const res = await fetch(`Acceso_seguro/pid/${encodeURIComponent(filename)}`);
+    if (!res.ok) throw new Error(`Error ${res.status}`);
+    svgText = await res.text();
+  } catch {
+    // Fallback: API del servidor webpack
     const res = await fetch(`/api/files/raw?path=/pid&name=${encodeURIComponent(filename)}`);
     if (!res.ok) throw new Error(`Error ${res.status}`);
-    const svgText = await res.text();
+    svgText = await res.text();
+  }
 
+  try {
     // Insertar SVG directamente para interactividad
     container.innerHTML = svgText;
     const svgEl = container.querySelector('svg');
@@ -57,7 +79,6 @@ window.loadPIDSVG = async function(filename) {
     if (typeof window._renderPropertyDashboard === 'function') setTimeout(window._renderPropertyDashboard, 150);
     if (typeof window._checkIntegration === 'function') setTimeout(window._checkIntegration, 200);
     window.showNotif(`P&ID "${filename}" cargado`, 'success');
-
   } catch (err) {
     // Fallback al canvas procedimental
     container.innerHTML = `<canvas id="pidCanvas" style="width:100%;height:100%"></canvas>`;
@@ -900,14 +921,24 @@ window.listOpUnitSVGs = async function() {
       if (svgs.length) return { path: p, files: svgs };
     } catch {}
   }
-  return { path: '/operaciones_unitarias', files: [] };
+  // Fallback: lista estatica para despliegues estaticos (GitHub Pages)
+  return { path: '/pid', files: window._STATIC_PID_SVGS };
 };
 
 window.loadOpUnitSVG = async function(path, filename) {
+  let svgText;
   try {
+    // Ruta directa funciona tanto en GitHub Pages como en webpack dev server
+    const res = await fetch(`Acceso_seguro/pid/${encodeURIComponent(filename)}`);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    svgText = await res.text();
+  } catch {
+    // Fallback: API del servidor webpack
     const res = await fetch(`/api/files/raw?path=${encodeURIComponent(path)}&name=${encodeURIComponent(filename)}`);
     if (!res.ok) throw new Error('HTTP ' + res.status);
-    const svgText = await res.text();
+    svgText = await res.text();
+  }
+  try {
     const container = document.getElementById('pidContainer');
     if (!container) return;
     // Reemplazar completamente el contenido (no fusionar)
@@ -1159,17 +1190,15 @@ function _showPIDTagsDropdown() {
 
 // ─── FILE LIST ────────────────────────────────────────────────────
 async function _renderPIDFileList() {
+  console.log('[PID] _renderPIDFileList called');
   const listEl = document.getElementById('pidFileList');
   const emptyEl = document.getElementById('pidFileListEmpty');
   const countEl = document.getElementById('pidFileCount');
   const countEl2 = document.getElementById('pidFileCount2');
-  if (!listEl) return;
+  if (!listEl) { console.log('[PID] pidFileList not found'); return; }
 
   try {
-    const res = await fetch('/api/files/list?path=/pid');
-    if (!res.ok) throw new Error('fetch fail');
-    const files = await res.json();
-    const svgs = files.filter(f => f.name && f.name.toLowerCase().endsWith('.svg'));
+    const svgs = await window.listPIDSVGs();
 
     if (countEl) countEl.textContent = String(svgs.length);
     if (countEl2) countEl2.textContent = String(svgs.length);
