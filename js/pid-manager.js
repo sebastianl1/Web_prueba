@@ -1191,10 +1191,7 @@ async function _renderPIDFileList() {
   if (!listEl) return;
 
   try {
-    const res = await fetch('/api/files/list?path=/pid');
-    if (!res.ok) throw new Error('fetch fail');
-    const files = await res.json();
-    const svgs = files.filter(f => f.name && f.name.toLowerCase().endsWith('.svg'));
+    const svgs = await window.listPIDSVGs();
 
     if (countEl) countEl.textContent = String(svgs.length);
     if (countEl2) countEl2.textContent = String(svgs.length);
