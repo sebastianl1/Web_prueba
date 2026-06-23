@@ -66,6 +66,10 @@ window.loadPIDSVG = async function(filename) {
       svgEl.style.height = '100%';
       svgEl.style.maxHeight = 'calc(100vh - 200px)';
       svgEl.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+      // Forzar tamaño de texto normal en data-tag
+      const fixStyle = document.createElementNS('http://www.w3.org/2000/svg', 'style');
+      fixStyle.textContent = '[data-tag] { font-size: inherit !important; }';
+      svgEl.insertBefore(fixStyle, svgEl.firstChild);
       _normalizeSVGColors(svgEl);
       _addSVGPanZoom(svgEl);
       _wireSVGHotspots(svgEl);
@@ -952,6 +956,10 @@ window.loadOpUnitSVG = async function(path, filename) {
       svgEl.style.height = '100%';
       svgEl.style.maxHeight = 'calc(100vh - 200px)';
       svgEl.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+      // Forzar tamaño de texto normal en data-tag
+      const fixStyle = document.createElementNS('http://www.w3.org/2000/svg', 'style');
+      fixStyle.textContent = '[data-tag] { font-size: inherit !important; }';
+      svgEl.insertBefore(fixStyle, svgEl.firstChild);
       window._normalizeSVGColors && window._normalizeSVGColors(svgEl);
       window._addSVGPanZoom && window._addSVGPanZoom(svgEl);
       window._wireSVGHotspots && window._wireSVGHotspots(svgEl);
