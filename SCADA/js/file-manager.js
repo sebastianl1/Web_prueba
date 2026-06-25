@@ -1,6 +1,6 @@
 /**
  * file-manager.js — File Manager avanzado con permisos
- * NexSCADA v5 — Módulo independiente
+ * SpY v5 — Módulo independiente
  *
  * Roles:
  *  - admin:    puede subir, crear carpetas, eliminar, descargar
@@ -28,7 +28,7 @@ function _renderBreadcrumb() {
   const el = document.getElementById('fmBreadcrumb');
   if (!el) return;
   const parts = window.currentPath.split('/').filter(Boolean);
-  let html = `<span class="fm-crumb" onclick="window.navigateTo('/')" style="cursor:pointer;color:var(--primary)">Archivos</span>`;
+    let html = `<span class="fm-crumb" onclick="window.navigateTo('/')" style="cursor:pointer;color:var(--primary)">Acceso Seguro</span>`;
   parts.forEach((p, i) => {
     const path = '/' + parts.slice(0, i + 1).join('/');
     html += ` <span style="color:var(--text-disabled)">›</span> <span class="fm-crumb" onclick="window.navigateTo('${_esc(path)}')" style="cursor:pointer;${i === parts.length-1 ? 'color:var(--text-primary)' : 'color:var(--primary)'}">${_esc(p)}</span>`;
@@ -73,8 +73,7 @@ window.refreshFiles = async function () {
     if (window.currentPath === '/') {
       const isSystem = (name) => {
         if(name.startsWith('.')) return true;
-        const h = ['node_modules','css','js','backend','assets','imagenes de reconstruccion'];
-        return h.includes(name.toLowerCase()) || name.endsWith('.html') || name.endsWith('.js') || name.endsWith('.json') || name.endsWith('.md');
+        return ['node_modules','css','js','backend','assets','imagenes de reconstruccion'].includes(name.toLowerCase());
       };
       files = files.filter(f => !isSystem(f.name));
     }
@@ -127,6 +126,7 @@ function _buildCard(f, isAdmin, idx = 0) {
 
   const card = document.createElement('div');
   card.className = 'fm-card';
+  card.setAttribute('data-fname', f.name.toLowerCase());
   card.style.cssText = `position:relative; background:var(--bg-elevated); border:1px solid var(--border-subtle); border-radius:12px; padding:20px; text-align:center; transition:all 0.2s cubic-bezier(0.4,0,0.2,1); cursor:pointer; min-height:140px; display:flex; flex-direction:column; align-items:center; justify-content:center;`;
 
   card.onmouseenter = () => { card.style.transform = 'translateY(-4px)'; card.style.borderColor = color; card.style.boxShadow = `0 8px 24px ${color}20`; };
@@ -135,14 +135,12 @@ function _buildCard(f, isAdmin, idx = 0) {
   const escName = _esc(f.name);
   card.innerHTML = `
     <div class="fm-card-actions" style="position:absolute; top:8px; right:8px; width:100%; display:flex; justify-content:flex-end; padding:0 8px; ${isAdmin && !isUp ? '' : 'visibility:hidden'}">
-      ${!isUp && isAdmin ? `
-      <div class="d-flex gap-2">
-        <button class="btn btn-sm p-1" style="color:var(--text-disabled)" onclick="_downloadItem('${escName}'); event.stopPropagation()" title="Descargar"><i data-feather="download" style="width:14px;height:14px"></i></button>
-        <button class="btn btn-sm p-1" style="color:var(--accent-red)" onclick="window.deleteFile('${escName}'); event.stopPropagation()" title="Eliminar"><i data-feather="trash-2" style="width:14px;height:14px"></i></button>
-      </div>` : `
-      <div class="d-flex">
-        ${!isUp && !isDir ? `<button class="btn btn-sm p-1" style="color:var(--text-disabled)" onclick="_downloadItem('${escName}'); event.stopPropagation()" title="Descargar"><i data-feather="download" style="width:14px;height:14px"></i></button>` : ''}
-      </div>`}
+      ${!isUp ? `
+      <div class="d-flex gap-1">
+        <button class="btn btn-sm p-1" style="color:${window._fmStarred.has(f.name) ? 'var(--warning,#f59e0b)' : 'var(--text-disabled)'}" onclick="window.fmToggleStar('${escName}'); event.stopPropagation()" title="${window._fmStarred.has(f.name) ? 'Quitar de destacados' : 'Destacar'}"><i data-feather="star" style="width:14px;height:14px"></i></button>
+        ${!isDir ? `<button class="btn btn-sm p-1" style="color:var(--text-disabled)" onclick="_downloadItem('${escName}'); event.stopPropagation()" title="Descargar"><i data-feather="download" style="width:14px;height:14px"></i></button>` : ''}
+        ${isAdmin ? `<button class="btn btn-sm p-1" style="color:var(--accent-red)" onclick="window.deleteFile('${escName}'); event.stopPropagation()" title="Eliminar"><i data-feather="trash-2" style="width:14px;height:14px"></i></button>` : ''}
+      </div>` : `<div class="d-flex"><!-- up button, no actions --></div>`}
     </div>
     <div style="width:48px; height:48px; border-radius:12px; background:${color}15; color:${color}; display:flex; align-items:center; justify-content:center; margin-bottom:12px; position:relative;">
       <i data-feather="${icon}" style="width:24px;height:24px"></i>
@@ -358,6 +356,23 @@ function _showDeleteModal(name) {
   if (typeof feather !== 'undefined') feather.replace();
 }
 
+// ─── SEARCH ──────────────────────────────────────────────────────
+let _searchTimer = null;
+document.addEventListener('DOMContentLoaded', () => {
+  const searchInput = document.getElementById('fmSearchInput');
+  if (!searchInput) return;
+  searchInput.addEventListener('input', () => {
+    clearTimeout(_searchTimer);
+    _searchTimer = setTimeout(() => {
+      const q = searchInput.value.trim().toLowerCase();
+      document.querySelectorAll('.fm-card').forEach(card => {
+        const name = card.getAttribute('data-fname') || '';
+        card.style.display = !q || name.includes(q) ? '' : 'none';
+      });
+    }, 250);
+  });
+});
+
 // ─── SYNC UI SEGÚN ROL ───────────────────────────────────────────
 function _syncUI() {
   const isAdmin = _isAdmin();
@@ -453,12 +468,24 @@ function _renderFilteredView(view) {
 window.fmToggleStar = function(name) {
   if (window._fmStarred.has(name)) {
     window._fmStarred.delete(name);
-    showNotif('"' + name + '" eliminado de destacados', 'info');
+    window.showNotif('"' + name + '" eliminado de destacados', 'info');
   } else {
     window._fmStarred.add(name);
-    showNotif('"' + name + '" agregado a destacados ⭐', 'success');
+    window.showNotif('"' + name + '" agregado a destacados ⭐', 'success');
   }
   _saveStarred();
+  // Refrescar estrellas en todas las cards visibles
+  document.querySelectorAll('.fm-card').forEach(card => {
+    const fname = card.getAttribute('data-fname');
+    if (fname === name.toLowerCase()) {
+      const starBtn = card.querySelector('[data-feather="star"]');
+      if (starBtn) {
+        const isStarred = window._fmStarred.has(name);
+        starBtn.style.color = isStarred ? 'var(--warning,#f59e0b)' : 'var(--text-disabled)';
+        starBtn.parentElement.title = isStarred ? 'Quitar de destacados' : 'Destacar';
+      }
+    }
+  });
   if (window._fmView === 'starred') _renderFilteredView('starred');
 };
 

@@ -1,6 +1,6 @@
-# CONTEXTO DEL PROYECTO — NexSCADA
+# CONTEXTO DEL PROYECTO — SpY
 
-Soy el desarrollador de **NexSCADA**, un sistema SCADA industrial corriendo con `webpack-dev-server` en `localhost:8080`.
+Soy el desarrollador de **SpY**, un sistema SCADA industrial corriendo con `webpack-dev-server` en `localhost:8080`.
 
 ---
 

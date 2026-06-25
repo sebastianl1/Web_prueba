@@ -1,5 +1,5 @@
 /**
- * NexSCADA — app.js (Webpack entry)
+ * SpY — app.js (Webpack entry)
  * ───────────────────────────────────
  * Webpack compila ESTE archivo a /js/app.js
  * Solo contiene: i18n (setLang) + login + logout

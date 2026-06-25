@@ -1,10 +1,10 @@
-# NexSCADA — Industrial Control System v5.0
+# SpY — Industrial Control System v5.0
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Version](https://img.shields.io/badge/version-5.0.0-green.svg)
 ![Tech](https://img.shields.io/badge/stack-Full%20Stack-orange.svg)
 
-**NexSCADA** es un sistema de control y adquisición de datos (SCADA) de última generación diseñado para la supervisión industrial avanzada. Combina la robustez de los protocolos industriales tradicionales con la potencia de la web moderna, visualización 3D y mantenimiento predictivo impulsado por IA.
+**SpY** es un sistema de control y adquisición de datos (SCADA) de última generación diseñado para la supervisión industrial avanzada. Combina la robustez de los protocolos industriales tradicionales con la potencia de la web moderna, visualización 3D y mantenimiento predictivo impulsado por IA.
 
 ---
 
@@ -57,8 +57,8 @@
 
 1. **Clonar el repositorio**:
    ```bash
-   git clone https://github.com/tu-usuario/NexSCADA.git
-   cd NexSCADA/SCADA
+   git clone https://github.com/tu-usuario/SpY.git
+   cd SpY/SCADA
    ```
 
 2. **Instalar dependencias**:

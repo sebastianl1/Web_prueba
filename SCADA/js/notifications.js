@@ -1,6 +1,6 @@
 /**
  * notifications.js — Sistema de notificaciones persistente
- * NexSCADA v5 — Módulo independiente de notificaciones
+ * SpY v5 — Módulo independiente de notificaciones
  * Las notifs se almacenan en localStorage y se muestran en #tab-notifications
  */
 

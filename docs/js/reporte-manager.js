@@ -1,5 +1,5 @@
 /**
- * NexSCADA — reporte-manager.js
+ * SpY — reporte-manager.js
  * Generación de reportes profesionales de producción (Éster Etílico)
  * Exportable a PDF vía html2pdf.js
  */

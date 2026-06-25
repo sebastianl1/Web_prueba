@@ -1,5 +1,5 @@
 /**
- * NexSCADA — alarm-manager.js
+ * SpY — alarm-manager.js
  * Reconocimiento de alarmas (ACK), historial, sonidos, badges
  * Se integra con alarmData de scada-core.js
  */

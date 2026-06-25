@@ -1,5 +1,5 @@
 /**
- * NexSCADA — integration-bus.js
+ * SpY — integration-bus.js
  * Bus de eventos compartido entre P&ID, HMI 3D y Dashboard.
  *
  * Eventos:

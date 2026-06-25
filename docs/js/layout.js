@@ -1,6 +1,6 @@
 /**
  * layout.js — Sidebar toggle + Customizer panel + showTab
- * NexSCADA v5 — Módulo independiente de layout
+ * SpY v5 — Módulo independiente de layout
  */
 
 // ─── SHOW TAB ─────────────────────────────────────────────────────

@@ -349,12 +349,14 @@ function _buildTickerItems(){
 
   // Mapa de items del ticker → variableId → scadaBus tag → color
   const defs=[
-    {label:'ACEITE', varId:'TK_ACEITE',       tag:'LT-001', icon:'📊'},
-    {label:'FILTRO', varId:'FILTRADO',        tag:'PT-001', icon:'⚙'},
-    {label:'BOMBA',  varId:'BOMBEO',          tag:'ST-001', icon:'💧'},
-    {label:'TEMP',   varId:'INT_CALOR',       tag:'TT-001', icon:'🌡'},
-    {label:'METANOL',varId:'TK_METANOL',      tag:'LT-003', icon:'📊'},
-    {label:'CIRC',   varId:'SIS_CIRCULACION', tag:'PT-002', icon:'🔄'},
+    {label:'REACTOR', varId:'EST-001',        tag:'EST-001', icon:'🌡'},
+    {label:'VISCOS',  varId:'VIS-001',        tag:'VIS-001', icon:'🧪'},
+    {label:'FILTRO',  varId:'FIL-001',        tag:'FIL-001', icon:'⚙'},
+    {label:'SECADOR', varId:'SEC-001',        tag:'SEC-001', icon:'🔥'},
+    {label:'SEPARADOR',varId:'SEP-001',       tag:'SEP-001', icon:'🔀'},
+    {label:'MAT.PRIMA',varId:'TK-001',        tag:'TK-001', icon:'📊'},
+    {label:'PRODUCTO', varId:'TK-004',        tag:'TK-004', icon:'📦'},
+    {label:'GLICEROL', varId:'GLI-001',       tag:'GLI-001', icon:'🧴'},
   ];
 
   const items=defs.map(d=>{
@@ -369,6 +371,24 @@ function _buildTickerItems(){
       <span style="color:${color};font-weight:600">${valStr}</span>
     </span><span class="ticker-sep">◆</span>`;
   });
+
+  // Eficiencia global del proceso (desde ReporteManager si existe)
+  var eff=null;
+  if(typeof ReporteManager!=='undefined' && ReporteManager._lastSnapshot){
+    var snap=ReporteManager._lastSnapshot;
+    if(snap.eficienciaGlobal!==undefined) eff=snap.eficienciaGlobal;
+  }
+  if(eff===null && pv['EST-001'] && pv['FIL-001'] && pv['VIS-001']){
+    var t=Math.min(1,Math.max(0,(pv['EST-001'].val-30)/(70-30)));
+    var p=Math.min(1,Math.max(0,1-(pv['FIL-001'].val-0.5)/4.5));
+    var v=Math.min(1,Math.max(0,1-(pv['VIS-001'].val-2)/13));
+    eff=Math.round((t*0.4+p*0.15+v*0.45)*100);
+  }
+  const effColor=eff===null?'var(--text-dim)':eff>=80?'var(--accent-green)':eff>=50?'var(--accent-amber)':'var(--accent-red)';
+  items.push(`<span class="ticker-item" title="Eficiencia global del proceso" style="cursor:default">
+    <span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:2px;color:var(--text-dim)">⚡ EFICIENCIA</span>
+    <span style="color:${effColor};font-weight:600">${eff!==null?eff+'%':'--'}</span>
+  </span><span class="ticker-sep">◆</span>`);
 
   // Alarmas
   const alarmColor=alarmCount>0?'var(--accent-red)':'var(--accent-green)';
@@ -963,7 +983,7 @@ function drawPID(){
   ctx.fillStyle='#00d4ff'; ctx.font='bold 11px JetBrains Mono'; ctx.textAlign='left';
   ctx.fillText('P&ID — ÁREA 100 — PROCESO PRINCIPAL', 12, 14);
   ctx.fillStyle='#3a6a8c'; ctx.font='10px JetBrains Mono'; ctx.textAlign='right';
-  ctx.fillText('NexSCADA v3.2 | ACTUALIZADO: '+new Date().toLocaleTimeString(), w-12, 14);
+  ctx.fillText('SpY v3.2 | ACTUALIZADO: '+new Date().toLocaleTimeString(), w-12, 14);
 }
 
 function hexToRgb(hex){

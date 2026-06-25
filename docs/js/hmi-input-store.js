@@ -1,5 +1,5 @@
 /**
- * NexSCADA — hmi-input-store.js
+ * SpY — hmi-input-store.js
  * Central store for HMI manual inputs.
  * Persists to localStorage, emits events via scadaBus.
  */

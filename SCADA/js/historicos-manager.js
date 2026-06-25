@@ -1,5 +1,5 @@
 /**
- * NexSCADA — historicos-manager.js  v3.0
+ * SpY — historicos-manager.js  v3.0
  * Bitácora de eventos de alarma con integración scadaBus.
  * Lee el historial de localStorage (misma clave que alarm-manager.js).
  */

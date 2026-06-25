@@ -1,5 +1,5 @@
 /**
- * NexSCADA — calendar-manager.js
+ * SpY — calendar-manager.js
  * Plan Maestro de Mantenimiento integrado con P&ID/HMI/Dashboard
  * Persistencia en localStorage · CRUD · Health Score · Reportes · scadaBus
  */

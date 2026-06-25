@@ -1,4 +1,4 @@
-# NexSCADA — Agent Guide
+# SpY — Agent Guide
 
 ## Two dev servers (don't confuse them)
 

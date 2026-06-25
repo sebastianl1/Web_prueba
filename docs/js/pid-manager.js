@@ -1,6 +1,6 @@
 /**
  * pid-manager.js — P&ID con carga de archivos SVG
- * NexSCADA v5 — Módulo independiente
+ * SpY v5 — Módulo independiente
  *
  * - Si hay archivos .svg en /pid/, los carga en el contenedor pidContainer
  * - SVG se incrusta directamente para permitir interactividad

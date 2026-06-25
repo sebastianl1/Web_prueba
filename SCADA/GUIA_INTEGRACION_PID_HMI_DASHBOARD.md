@@ -1,11 +1,11 @@
 # Guía de Integración P&ID ↔ HMI ↔ Dashboard
-## Cómo construir diagramas en AutoCAD para que se integren automáticamente en NexSCADA
+## Cómo construir diagramas en AutoCAD para que se integren automáticamente en SpY
 
 ---
 
 ## 1. Filosofía del Sistema
 
-NexSCADA unifica tres vistas mediante un bus de eventos (`scadaBus`) y datos en vivo (`processVars`):
+SpY unifica tres vistas mediante un bus de eventos (`scadaBus`) y datos en vivo (`processVars`):
 
 ```
   scadaBus (tag:select / tag:focus)
@@ -264,7 +264,7 @@ Puedes crear SVGs individuales por equipo y subirlos a `Acceso_seguro/operacione
    ├── Buscar elementos que representan sensores/variables
    └── Agregar data-tag="VAR_ID" a cada uno
 
-3. Subir a NexSCADA
+3. Subir a SpY
    ├── P&ID → panel P&ID → botón "Subir"
    │   └── El archivo va a Acceso_seguro/pid/
    └── HMI → panel HMI → botón "Subir"

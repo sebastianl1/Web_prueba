@@ -1,4 +1,4 @@
-# Integración NexSCADA — P&ID ↔ HMI ↔ Dashboard ↔ Alarmas
+# Integración SpY — P&ID ↔ HMI ↔ Dashboard ↔ Alarmas
 
 ## Arquitectura general
 

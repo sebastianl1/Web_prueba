@@ -1,6 +1,6 @@
 function _num(v) {if (v === null || v === undefined || typeof v !== "number" || !isFinite(v)) return "0";if (v === 0) return "0";var abs = Math.abs(v);if (abs >= 10000 || abs < 0.001) {var exp = Math.floor(Math.log10(abs));var mant = v / Math.pow(10, exp);return mant.toFixed(2) + " \u00d7 10^{" + exp + "}";}if (abs >= 100) return v.toFixed(1);if (abs >= 1) return v.toFixed(2);if (abs >= 0.01) return v.toFixed(4);return v.toFixed(6);}
 /**
- * NexSCADA — balance-manager.js  v8.1
+ * SpY — balance-manager.js  v8.1
  * Balance de Materia (Fick), Energía (Fourier) y Momentum (Newton)
  * por Proceso Unitario — valores reales de TAG_PROPERTIES_DB
  * Render con KaTeX · Actualización cada 2s

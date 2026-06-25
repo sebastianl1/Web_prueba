@@ -1,5 +1,5 @@
 /**
- * NexSCADA — dashboard-manager.js  v7.0
+ * SpY — dashboard-manager.js  v7.0
  * Dashboard profesional con todos los tags y sus propiedades físico-químicas.
  * Diseño didáctico: cada tag se muestra como ficha técnica con iconografía,
  * tablas de propiedades y estado en vivo.

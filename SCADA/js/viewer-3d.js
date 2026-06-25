@@ -1,6 +1,6 @@
 /**
  * viewer-3d.js — Vista 3D con carga de archivos GLB
- * NexSCADA v5 — Módulo independiente
+ * SpY v5 — Módulo independiente
  *
  * - Si hay archivos .glb en /models/, los carga con THREE.GLTFLoader
  * - Fallback: escena de geometría procedimental (ya construida en scada-core.js)

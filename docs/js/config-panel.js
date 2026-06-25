@@ -1,6 +1,6 @@
 /**
  * config-panel.js — Panel de Configuración completo
- * NexSCADA v5 — Módulo independiente de configuración
+ * SpY v5 — Módulo independiente de configuración
  * Sub-tabs: Perfil, Tags, Variables, Conexiones, Alarmas, Usuarios, Sistema
  */
 
@@ -10,10 +10,10 @@ const CONFIG_KEY = 'scada_system_config';
 
 function _defaultUsers() {
   return [
-    { id:'u1', name:'Administrador', username:'admin',    email:'admin@nexscada.com',  role:'admin',    active:true,  lastLogin:new Date().toISOString() },
-    { id:'u2', name:'Operador 1',    username:'operador', email:'op1@nexscada.com',    role:'operator', active:true,  lastLogin:'' },
-    { id:'u3', name:'Supervisor',    username:'super',    email:'super@nexscada.com',  role:'supervisor',active:true, lastLogin:'' },
-    { id:'u4', name:'Visor',         username:'visor',    email:'visor@nexscada.com',  role:'viewer',   active:false, lastLogin:'' },
+    { id:'u1', name:'Administrador', username:'admin',    email:'admin@spy-sena.com',  role:'admin',    active:true,  lastLogin:new Date().toISOString() },
+    { id:'u2', name:'Operador 1',    username:'operador', email:'op1@spy-sena.com',    role:'operator', active:true,  lastLogin:'' },
+    { id:'u3', name:'Supervisor',    username:'super',    email:'super@spy-sena.com',  role:'supervisor',active:true, lastLogin:'' },
+    { id:'u4', name:'Visor',         username:'visor',    email:'visor@spy-sena.com',  role:'viewer',   active:false, lastLogin:'' },
   ];
 }
 
@@ -330,7 +330,7 @@ function renderSystemTab() {
     <div class="panel fade-in">
       <div class="panel-header"><div class="panel-title">Información de Planta</div></div>
       <div class="panel-body">
-        <div class="mb-3"><label style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px">Nombre de Planta</label><input id="sys-plant" type="text" class="form-control" value="${cfg.plant_name || 'NexSCADA — Planta Industrial'}" style="background:var(--bg-input);border:1px solid var(--border-subtle);color:var(--text-primary)"></div>
+        <div class="mb-3"><label style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px">Nombre de Planta</label><input id="sys-plant" type="text" class="form-control" value="${cfg.plant_name || 'SpY — Planta Industrial'}" style="background:var(--bg-input);border:1px solid var(--border-subtle);color:var(--text-primary)"></div>
         <div class="mb-3"><label style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px">Zona Horaria</label>
           <select id="sys-tz" class="form-select" style="background:var(--bg-input);border:1px solid var(--border-subtle);color:var(--text-primary)">
             <option ${cfg.tz==='America/Bogota'?'selected':''}>America/Bogota</option>
@@ -358,7 +358,7 @@ function renderSystemTab() {
           <label class="btn btn-sm" style="border:1px solid var(--border-default);color:var(--text-secondary);background:transparent;cursor:pointer;margin:0">📤 Importar Config<input type="file" accept=".json" style="display:none" onchange="importConfig(event)"></label>
         </div>
         <hr style="border-color:var(--border-subtle);margin:16px 0">
-        <p style="font-size:12px;color:var(--text-disabled)">Versión del sistema: <span style="color:var(--accent-cyan);font-family:'JetBrains Mono',monospace">NexSCADA v5.0.0</span></p>
+        <p style="font-size:12px;color:var(--text-disabled)">Versión del sistema: <span style="color:var(--accent-cyan);font-family:'JetBrains Mono',monospace">SpY v5.0.0</span></p>
       </div>
     </div>
   </div>`;
@@ -383,7 +383,7 @@ window.exportConfig = function() {
   const data = { users: _loadUsers(), config: _loadConfig(), variables: JSON.parse(localStorage.getItem('scada-variables') || '[]') };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href = url; a.download = 'nexscada_config.json'; a.click();
+  const a = document.createElement('a'); a.href = url; a.download = 'spy-sena_config.json'; a.click();
   URL.revokeObjectURL(url);
   window.showNotif('Configuración exportada correctamente', 'success');
 };

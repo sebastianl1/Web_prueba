@@ -1,5 +1,5 @@
 /**
- * NexSCADA — notifications-manager.js
+ * SpY — notifications-manager.js
  * Historial de notificaciones · Marcar como leído · Filtros · Badge
  * Intercepta window.showNotif para capturar automáticamente cada notificación
  */
