@@ -136,6 +136,9 @@ function initApp() {
       window._simulateProcessVars(new Date().toLocaleTimeString());
     }
     if (typeof populateVars === 'function') populateVars();
+    if (typeof ReporteManager !== 'undefined' && ReporteManager.start) {
+      ReporteManager.start();
+    }
   } catch(e) {
     console.error('initApp error:', e);
   }

@@ -19,7 +19,6 @@ window._STATIC_PID_SVGS = [
 
 // ─── LISTAR SVGs ──────────────────────────────────────────────────
 window.listPIDSVGs = async function() {
-  console.log('[PID] listPIDSVGs called');
   const svgs = [...window._STATIC_PID_SVGS];
   try {
     const res = await fetch('/api/files/list?path=/pid');
@@ -28,8 +27,7 @@ window.listPIDSVGs = async function() {
       const apiSvgs = files.filter(f => f.name && f.name.toLowerCase().endsWith('.svg'));
       if (apiSvgs.length) return apiSvgs;
     }
-  } catch (e) { console.log('[PID] API fallback to static list:', e.message); }
-  console.log('[PID] Returning static list:', svgs.length, 'files');
+  } catch {}
   return svgs;
 };
 
@@ -57,6 +55,9 @@ window.loadPIDSVG = async function(filename) {
   }
 
   try {
+    // Quitar font-size:3px de data-tag (los SVGs de biodiesel lo traen)
+    svgText = svgText.replace(/font-size\s*:\s*3px\s*!important\s*/gi, '');
+
     // Insertar SVG directamente para interactividad
     container.innerHTML = svgText;
     const svgEl = container.querySelector('svg');
@@ -69,6 +70,10 @@ window.loadPIDSVG = async function(filename) {
       _addSVGPanZoom(svgEl);
       _wireSVGHotspots(svgEl);
       _wirePIDLiveValues(svgEl);
+      // Forzar font-size normal en data-tag (inline > CSS !important)
+      svgEl.querySelectorAll('[data-tag]').forEach(el => {
+        el.style.setProperty('font-size', 'inherit', 'important');
+      });
     }
 
     window._pidCurrentFile = filename;
@@ -938,6 +943,8 @@ window.loadOpUnitSVG = async function(path, filename) {
     if (!res.ok) throw new Error('HTTP ' + res.status);
     svgText = await res.text();
   }
+  // Quitar font-size:3px de data-tag (los SVGs de biodiesel lo traen)
+  svgText = svgText.replace(/font-size\s*:\s*3px\s*!important\s*/gi, '');
   try {
     const container = document.getElementById('pidContainer');
     if (!container) return;
@@ -953,6 +960,10 @@ window.loadOpUnitSVG = async function(path, filename) {
       window._addSVGPanZoom && window._addSVGPanZoom(svgEl);
       window._wireSVGHotspots && window._wireSVGHotspots(svgEl);
       window._wirePIDLiveValues && window._wirePIDLiveValues(svgEl);
+      // Forzar font-size normal en data-tag (inline > CSS !important)
+      svgEl.querySelectorAll('[data-tag]').forEach(function(el) {
+        el.style.setProperty('font-size', 'inherit', 'important');
+      });
     }
     window._pidCurrentFile = filename;
     const label = document.getElementById('pidLabel');
@@ -1190,12 +1201,11 @@ function _showPIDTagsDropdown() {
 
 // ─── FILE LIST ────────────────────────────────────────────────────
 async function _renderPIDFileList() {
-  console.log('[PID] _renderPIDFileList called');
   const listEl = document.getElementById('pidFileList');
   const emptyEl = document.getElementById('pidFileListEmpty');
   const countEl = document.getElementById('pidFileCount');
   const countEl2 = document.getElementById('pidFileCount2');
-  if (!listEl) { console.log('[PID] pidFileList not found'); return; }
+  if (!listEl) return;
 
   try {
     const svgs = await window.listPIDSVGs();

@@ -488,6 +488,9 @@
             </div>
           </div>
           <span class="topbar-clock font-mono d-none d-lg-block" id="clock">--:--:--</span>
+          <button class="topbar-btn" title="Generar Reporte" onclick="ReporteManager.generar()">
+            <i data-feather="file-text" style="width:16px;height:16px;color:var(--primary)"></i>
+          </button>
           <button class="topbar-btn ms-1" title="Personalizar" onclick="toggleCustomizer()">
             <i data-feather="sliders" style="width:16px;height:16px;color:var(--primary)"></i>
           </button>
@@ -1644,6 +1647,9 @@
   <script src="js/historicos-manager.js"></script>
   <script src="js/app.js"></script>
   <script src="assets/katex/katex.min.js"></script>
+  <!-- Reporte PDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <script src="js/reporte-manager.js"></script>
 </body>
 </html>
 
