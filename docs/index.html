@@ -7,21 +7,21 @@
   <title>Scada GRUPO_3 — Industrial Control System</title>
   <!-- Dynamic base tag for GitHub Pages subfolder deployment -->
   <script>!function(){var p=document.location.pathname,b=(p.match(/.*\//)||['/'])[0];document.write('<base href="'+b+'">')}()</script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/css/bootstrap.min.css?v=1782176501">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/feather-icons/4.29.1/feather.min.js?v=1782176501"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js?v=1782176501"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js?v=1782176501"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js?v=1782176501"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js?v=1782176501"></script>
-  <script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js?v=1782176501"></script>
-  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js?v=1782176501"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/css/bootstrap.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/feather-icons/4.29.1/feather.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <link
     href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&family=Rajdhani:wght@500;600;700&display=swap"
     rel="stylesheet">
   <!-- Estilos propios del SCADA (cargados directamente) -->
-  <link rel="stylesheet" href="css/style.css?v=1782176501">
-  <link rel="stylesheet" href="css/scada-core.css?v=1782176501">
-  <link rel="stylesheet" href="assets/katex/katex.min.css?v=1782176501">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/scada-core.css">
+  <link rel="stylesheet" href="assets/katex/katex.min.css">
   <!-- Login modal — lightweight responsive styles -->
   <style>
     body.login-open { overflow:hidden; }
@@ -488,6 +488,9 @@
             </div>
           </div>
           <span class="topbar-clock font-mono d-none d-lg-block" id="clock">--:--:--</span>
+          <button class="topbar-btn" title="Generar Reporte" onclick="ReporteManager.generar()">
+            <i data-feather="file-text" style="width:16px;height:16px;color:var(--primary)"></i>
+          </button>
           <button class="topbar-btn ms-1" title="Personalizar" onclick="toggleCustomizer()">
             <i data-feather="sliders" style="width:16px;height:16px;color:var(--primary)"></i>
           </button>
@@ -1602,24 +1605,24 @@
   </div>
 
   <!-- Bootstrap -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/js/bootstrap.bundle.min.js?v=1782176501"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/js/bootstrap.bundle.min.js"></script>
   <!-- Lógica SCADA (orden importante) -->
-  <script src="js/layout.js?v=1782176501"></script>
-  <script src="js/notifications.js?v=1782176501"></script>
-  <script src="js/integration-bus.js?v=1782176501"></script>
-  <script src="js/tag-properties.js?v=1782176501"></script>
-  <script src="js/hmi-input-store.js?v=1782176501"></script>
-  <script src="js/hmi-canvas.js?v=1782176501"></script>
-  <script src="js/config-panel.js?v=1782176501"></script>
+  <script src="js/layout.js"></script>
+  <script src="js/notifications.js"></script>
+  <script src="js/integration-bus.js"></script>
+  <script src="js/tag-properties.js"></script>
+  <script src="js/hmi-input-store.js"></script>
+  <script src="js/hmi-canvas.js"></script>
+  <script src="js/config-panel.js"></script>
   <!-- GitHub Pages adapter — stub APIs en hosting estático -->
-  <script src="js/gh-pages-adapter.js?v=1782176501"></script>
-  <script src="js/viewer-3d.js?v=1782176501"></script>
-  <script src="js/pid-manager.js?v=1782176501"></script>
-  <script src="js/hmi-manager.js?v=1782176501"></script>
-  <script src="js/scada-core.js?v=1782176501"></script>
-  <script src="js/variable-manager.js?v=1782176501"></script>
-  <script src="js/file-manager.js?v=1782176501"></script>
-  <script src="js/balance-manager.js?v=1782176501"></script>
+  <script src="js/gh-pages-adapter.js"></script>
+  <script src="js/viewer-3d.js"></script>
+  <script src="js/pid-manager.js"></script>
+  <script src="js/hmi-manager.js"></script>
+  <script src="js/scada-core.js"></script>
+  <script src="js/variable-manager.js"></script>
+  <script src="js/file-manager.js"></script>
+  <script src="js/balance-manager.js"></script>
   <!-- Stubs de funciones llamadas en HTML pero definidas en JS externos -->
   <script>
     // Stub: se sobreescribe si file-manager.js define la función real
@@ -1637,13 +1640,16 @@
     }
   </script>
   <!-- Managers funcionales -->
-  <script src="js/calendar-manager.js?v=1782176501"></script>
-  <script src="js/alarm-manager.js?v=1782176501"></script>
-  <script src="js/notifications-manager.js?v=1782176501"></script>
-  <script src="js/dashboard-manager.js?v=1782176501"></script>
-  <script src="js/historicos-manager.js?v=1782176501"></script>
-  <script src="js/app.js?v=1782176501"></script>
-  <script src="assets/katex/katex.min.js?v=1782176501"></script>
+  <script src="js/calendar-manager.js"></script>
+  <script src="js/alarm-manager.js"></script>
+  <script src="js/notifications-manager.js"></script>
+  <script src="js/dashboard-manager.js"></script>
+  <script src="js/historicos-manager.js"></script>
+  <script src="js/app.js"></script>
+  <script src="assets/katex/katex.min.js"></script>
+  <!-- Reporte PDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <script src="js/reporte-manager.js"></script>
 </body>
 </html>
 
